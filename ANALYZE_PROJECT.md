@@ -4,33 +4,78 @@
 
 openMSX는 MSX 컴퓨터를 에뮬레이트하는 오픈소스 프로젝트입니다. "완벽한 에뮬레이션"을 목표로 하며, Z80 및 R800 CPU를 지원합니다.
 
-### 1.1 디렉토리 구조
+이 문서는 **onionmixer/openMSX** fork 버전을 기준으로 작성되었습니다.
+
+### 1.1 디렉토리 구조 및 파일 통계
 
 ```
-openMSX/src/
-├── cpu/           # CPU 에뮬레이션 (Z80, R800)
-├── memory/        # 메모리 관리 (RAM, ROM, 매퍼)
-├── debugger/      # 디버거 코어 기능
-├── imgui/         # Dear ImGui 기반 디버거 UI
-├── video/         # VDP 에뮬레이션
-├── sound/         # 사운드 칩 에뮬레이션
-├── fdc/           # 플로피 디스크 컨트롤러
-├── ide/           # IDE 장치
-├── serial/        # 시리얼 통신
-├── input/         # 입력 장치
-├── console/       # 콘솔 UI
-├── commands/      # Tcl 명령어 시스템
-├── config/        # 설정 관리
-├── events/        # 이벤트 시스템
-├── file/          # 파일 I/O
-├── settings/      # 사용자 설정
-├── utils/         # 유틸리티 함수
-└── 3rdparty/      # 서드파티 라이브러리 (ImGui 등)
+openMSX/
+├── src/                    # 소스 코드 (500+ .cc, 700+ .hh 파일)
+│   ├── cpu/               # CPU 에뮬레이션 (12 .cc, 18 .hh)
+│   ├── memory/            # 메모리 관리 (91 .cc, 93 .hh)
+│   ├── debugger/          # 디버거 코어 + HTTP 서버 (11 .cc, 12 .hh)
+│   ├── imgui/             # Dear ImGui 디버거 UI (38 .cc, 43 .hh)
+│   ├── video/             # VDP 에뮬레이션 (38 .cc, 49 .hh)
+│   │   ├── scalers/       # 픽셀 스케일러 (18 파일)
+│   │   ├── v9990/         # V9990 VDP (22 파일)
+│   │   └── ld/            # Laserdisc VDP (8 파일)
+│   ├── sound/             # 사운드 칩 (53 .cc, 58 .hh)
+│   ├── fdc/               # 플로피 디스크 컨트롤러 (46 .cc, 47 .hh)
+│   ├── ide/               # IDE 장치 (18 .cc, 21 .hh)
+│   ├── serial/            # 시리얼 통신 (30 .cc, 31 .hh)
+│   ├── input/             # 입력 장치 (26 .cc, 30 .hh)
+│   ├── cassette/          # 카세트 테이프 (11 .cc, 11 .hh)
+│   ├── laserdisc/         # Laserdisc 플레이어 (5 .cc, 5 .hh)
+│   ├── console/           # 콘솔 UI (9 .cc, 9 .hh)
+│   ├── commands/          # Tcl 명령어 시스템 (13 .cc, 17 .hh)
+│   ├── config/            # 설정 관리 (4 .cc, 8 .hh)
+│   ├── events/            # 이벤트 시스템 (18 .cc, 20 .hh)
+│   ├── file/              # 파일 I/O (14 .cc, 19 .hh)
+│   ├── settings/          # 사용자 설정 (13 .cc, 13 .hh)
+│   ├── utils/             # 유틸리티 함수 (16 .cc, 85 .hh)
+│   ├── thread/            # 스레딩 (2 .cc, 2 .hh)
+│   ├── security/          # 보안 함수 (3 .cc, 3 .hh)
+│   └── 3rdparty/          # 서드파티 라이브러리
+├── build/                  # 빌드 시스템
+│   ├── main.mk            # 메인 빌드 스크립트
+│   ├── 3rdparty.mk        # 3rd party 빌드
+│   ├── flavour-*.mk       # 빌드 플레이버 (13개)
+│   ├── platform-*.mk      # 플랫폼별 설정 (12개)
+│   └── *.py               # Python 빌드 도구
+├── share/                  # 리소스 파일 (660+ 파일)
+│   ├── machines/          # 머신 정의 XML (100+)
+│   ├── scripts/           # Tcl 스크립트 (67개)
+│   ├── extensions/        # 하드웨어 확장
+│   ├── systemroms/        # 시스템 ROM 정의
+│   ├── software/          # 소프트웨어 ROM DB
+│   └── skins/             # UI 스킨
+├── doc/                    # 문서
+└── derived/                # 빌드 결과물 (자동 생성)
 ```
+
+### 1.2 주요 컴포넌트별 파일 수
+
+| 컴포넌트 | .cc 파일 | .hh 파일 | 합계 | 설명 |
+|----------|----------|----------|------|------|
+| memory/ | 91 | 93 | 184 | 메모리 매핑, ROM/RAM, 카트리지 |
+| sound/ | 53 | 58 | 111 | 사운드 칩 에뮬레이션 |
+| fdc/ | 46 | 47 | 93 | 플로피 디스크 컨트롤러 |
+| video/ | 38 | 49 | 87 | VDP 에뮬레이션 |
+| imgui/ | 38 | 43 | 81 | Dear ImGui 디버거 UI |
+| serial/ | 30 | 31 | 61 | 시리얼/MIDI 통신 |
+| input/ | 26 | 30 | 56 | 입력 장치 |
+| ide/ | 18 | 21 | 39 | IDE 하드 드라이브 |
+| events/ | 18 | 20 | 38 | 이벤트 시스템 |
+| file/ | 14 | 19 | 33 | 파일 I/O |
+| cpu/ | 12 | 18 | 30 | CPU 에뮬레이션 코어 |
+| commands/ | 13 | 17 | 30 | Tcl 명령어 |
+| settings/ | 13 | 13 | 26 | 설정 관리 |
+| debugger/ | 11 | 12 | 23 | 디버거 코어 + HTTP 서버 |
+| cassette/ | 11 | 11 | 22 | 카세트 테이프 |
 
 ---
 
-## 2. CPU 디버거 분석
+## 2. CPU 에뮬레이션
 
 ### 2.1 아키텍처 개요
 
@@ -43,60 +88,44 @@ openMSX/src/
 │  (주소 BP)     │  (메모리/IO 감시)│  (조건부 중단)           │
 ├─────────────────────────────────────────────────────────────┤
 │                    MSXCPUInterface                           │
-│  src/cpu/MSXCPUInterface.hh                                 │
+│  src/cpu/MSXCPUInterface.hh (19,670 bytes)                  │
 ├─────────────────────────────────────────────────────────────┤
 │         MSXCPU                    │       CPUCore<T>         │
-│  src/cpu/MSXCPU.hh               │  src/cpu/CPUCore.hh      │
+│  src/cpu/MSXCPU.hh (225 lines)   │  src/cpu/CPUCore.hh      │
 ├──────────────────────────────────┼───────────────────────────┤
 │       Z80TYPE                    │       R800TYPE            │
+│   3.58 MHz (표준)                │  3.58/5.37/7.16/10.74 MHz │
 └──────────────────────────────────┴───────────────────────────┘
 ```
 
-### 2.2 핵심 클래스 상세 분석
+### 2.2 핵심 클래스
 
 #### 2.2.1 MSXCPU (`src/cpu/MSXCPU.hh`)
-
-MSX CPU를 추상화하는 최상위 클래스입니다.
 
 ```cpp
 class MSXCPU final : private Observer<Setting> {
 public:
     enum class Type : uint8_t { Z80, R800 };
 
-    // CPU 리셋
     void doReset(EmuTime time);
-
-    // Z80/R800 전환
     void setActiveCPU(Type cpu);
 
-    // 인터럽트 처리
     void raiseIRQ();
     void lowerIRQ();
     void raiseNMI();
     void lowerNMI();
 
-    // 메모리 캐시 무효화
     void invalidateAllSlotsRWCache(uint16_t start, unsigned size);
-
-    // 레지스터 접근
     CPURegs& getRegisters();
 
 private:
     std::unique_ptr<CPUCore<Z80TYPE>> z80;
-    std::unique_ptr<CPUCore<R800TYPE>> r800;  // nullptr 가능
+    std::unique_ptr<CPUCore<R800TYPE>> r800;  // turboR만
     bool z80Active{true};
 };
 ```
 
-**주요 기능:**
-- Z80과 R800 CPU 간 전환 지원 (turboR)
-- IRQ/NMI 인터럽트 관리
-- 메모리 슬롯 캐시 관리
-- 디버그용 레지스터 접근 제공
-
 #### 2.2.2 CPUCore (`src/cpu/CPUCore.hh`)
-
-템플릿 기반 CPU 코어 구현입니다.
 
 ```cpp
 template<typename CPU_POLICY>
@@ -105,22 +134,18 @@ public:
     void execute(bool fastForward);
     void doReset(EmuTime time);
 
-    // CPU 루프 종료 요청
     void exitCPULoopSync();   // 동기 (메인 스레드)
     void exitCPULoopAsync();  // 비동기 (다른 스레드)
 
-    // 인터럽트
     void raiseIRQ();
     void lowerIRQ();
     void raiseNMI();
     void lowerNMI();
 
 private:
-    // 메모리 캐시
     std::array<const uint8_t*, CacheLine::NUM> readCacheLine;
     std::array<uint8_t*, CacheLine::NUM> writeCacheLine;
 
-    // 프로브 (디버거용)
     Probe<int> IRQStatus;
     Probe<void> IRQAccept;
 
@@ -129,15 +154,7 @@ private:
 };
 ```
 
-**핵심 설계:**
-- `CPU_POLICY` 템플릿으로 Z80/R800 차이 추상화
-- 메모리 캐시 라인으로 읽기/쓰기 성능 최적화
-- `exitLoop` atomic 변수로 스레드 안전한 중단 지원
-- 명령어 트레이싱 지원
-
 #### 2.2.3 CPURegs (`src/cpu/CPURegs.hh`)
-
-Z80/R800 레지스터 표현 클래스입니다.
 
 ```cpp
 class CPURegs {
@@ -162,14 +179,8 @@ public:
     uint8_t getIM() const;   // 인터럽트 모드
     uint8_t getI() const;    // 인터럽트 벡터
     uint8_t getR() const;    // 리프레시 레지스터
-    bool getIFF1() const;    // 인터럽트 플래그
+    bool getIFF1() const;
     bool getIFF2() const;
-    uint8_t getHALT() const;
-
-    // 명령어 시퀀스 추적
-    void setCurrentEI();     // EI 명령 실행 중
-    void setCurrentLDAI();   // LD A,I/R 명령 실행 중
-    bool prevWasEI() const;  // 이전 명령이 EI였는지
 
 private:
     z80regPair AF_, BC_, DE_, HL_;
@@ -179,168 +190,302 @@ private:
 };
 ```
 
-**특징:**
-- 엔디안 독립적 레지스터 쌍 접근
-- 명령어 시퀀스 추적 (EI 후 인터럽트 지연 등)
-- Z80/R800 리프레시 레지스터 차이 처리
+---
 
-### 2.3 브레이크포인트 시스템
+## 3. 메모리 시스템
 
-#### 2.3.1 BreakPointBase (`src/cpu/BreakPointBase.hh`)
+### 3.1 메모리 컴포넌트 (184 파일)
 
-모든 브레이크포인트/워치포인트의 CRTP 기반 클래스입니다.
+| 카테고리 | 주요 클래스 | 설명 |
+|----------|-------------|------|
+| 기본 | MSXMemoryMapper, MSXRam, MSXRom | 기본 메모리 |
+| 카트리지 | RomPlain, RomKonami, RomASCII8/16 | ROM 매퍼 타입 |
+| 고급 | MegaFlashRomSCC, Carnivore2 | 고급 카트리지 |
+| 플래시 | AmdFlash | 플래시 메모리 |
+| EEPROM | EEPROM_93C46 | SPI EEPROM |
+
+### 3.2 Debuggable 인터페이스
 
 ```cpp
-template<typename Derived>
-class BreakPointBase {
+class Debuggable {
 public:
-    unsigned getId() const;
-    std::string getIdStr() const;  // "bp#1", "wp#2" 등
-
-    TclObject getCondition() const;
-    TclObject getCommand() const;
-    bool isEnabled() const;
-    bool onlyOnce() const;
-
-    // 조건 검사 및 명령 실행
-    bool checkAndExecute(GlobalCliComm& cliComm, Interpreter& interp);
-
-private:
-    TclObject command{"debug break"};  // 기본 명령
-    TclObject condition;                // Tcl 조건식
-    bool enabled = true;
-    bool once = false;
-    bool executing = false;  // 재귀 실행 방지
-
-    static inline unsigned lastId = 0;  // 전역 ID 카운터
+    virtual unsigned getSize() const = 0;
+    virtual std::string_view getDescription() const = 0;
+    virtual uint8_t read(unsigned address) = 0;
+    virtual void write(unsigned address, uint8_t value) = 0;
+    virtual void readBlock(unsigned start, std::span<uint8_t> output);
 };
 ```
 
-#### 2.3.2 BreakPoint (`src/cpu/BreakPoint.hh`)
+**주요 Debuggable 구현체:**
 
-주소 기반 브레이크포인트입니다.
+| 클래스 | 설명 | 크기 |
+|--------|------|------|
+| `MemoryDebug` | 현재 슬롯의 64KB 메모리 | 0x10000 |
+| `SlottedMemoryDebug` | 모든 슬롯의 메모리 | 0x10000 * 16 |
+| `IODebug` | I/O 포트 | 0x100 |
+| `MSXCPU::Debuggable` | CPU 레지스터 | ~28 바이트 |
+
+### 3.3 CheckedRam - 미초기화 메모리 탐지
 
 ```cpp
+class CheckedRam final : private Observer<Setting> {
+public:
+    uint8_t read(size_t addr);   // 초기화 검사 포함
+    uint8_t peek(size_t addr) const;
+    void write(size_t addr, uint8_t value);
+
+private:
+    std::vector<bool> completely_initialized_cacheline;
+    std::vector<std::bitset<CacheLine::SIZE>> uninitialized;
+    Ram ram;
+    TclCallback umrCallback;  // 미초기화 읽기 콜백
+};
+```
+
+---
+
+## 4. 비디오 시스템 (VDP)
+
+### 4.1 지원 VDP 칩
+
+| 칩 | 기종 | VRAM | 특징 |
+|----|------|------|------|
+| TMS9918A | MSX1 | 16KB | 기본 VDP |
+| V9938 | MSX2 | 128KB | 확장 그래픽 모드 |
+| V9958 | MSX2+ | 128KB | 수평 스크롤, YJK |
+| V9990 | turboR | 512KB | 고급 그래픽 |
+
+### 4.2 렌더링 파이프라인
+
+```
+DisplayMode
+    │
+    ▼
+BitmapConverter / CharacterConverter
+    │
+    ▼
+PixelRenderer
+    │
+    ▼
+RawFrame (unscaled)
+    │
+    ▼
+PostProcessor (scalers)
+    │
+    ▼
+Rasterizer (SDL/OpenGL)
+```
+
+### 4.3 스케일러
+
+- **2xSaI**: 안티앨리어싱 보간
+- **HQ2x/HQ3x**: 고품질 스케일링
+- **Scale2x/Scale3x**: 정수배 스케일링
+- **Simple**: 기본 스케일링
+
+---
+
+## 5. 사운드 시스템
+
+### 5.1 사운드 칩 에뮬레이션 (111 파일)
+
+| 칩 | 클래스 | 설명 |
+|----|--------|------|
+| AY-3-8910 | AY8910 | 3채널 PSG + 노이즈 |
+| Y8950 | Y8950 | FM + 드럼 |
+| YM2413 | MSXMusic | FM-PAC |
+| YM2151 | - | OPM FM |
+| SCC | SCC | 파형 메모리 |
+| PCM | TurboRPCM | 8비트 DAC |
+
+### 5.2 MSXMixer
+
+```cpp
+class MSXMixer {
+public:
+    void registerSound(SoundDevice& device);
+    void unregisterSound(SoundDevice& device);
+    void setVolume(float volume);
+    void setMasterVolume(int volume);
+
+private:
+    std::vector<SoundDevice*> devices;
+    float masterVolume;
+};
+```
+
+---
+
+## 6. Debug HTTP Server (Fork 추가 기능)
+
+### 6.1 개요
+
+이 fork에서 추가된 Debug HTTP Server는 웹 브라우저를 통해 실시간 디버깅 정보를 확인할 수 있는 기능입니다.
+
+### 6.2 아키텍처
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      DebugHttpServer                             │
+│  - 4개 포트 관리 (65501-65504)                                  │
+│  - TCL 설정 연동 (debug_http_enable)                            │
+├─────────────────────────────────────────────────────────────────┤
+│  DebugHttpServerPort (×4)                                       │
+│  - 소켓 리스닝                                                  │
+│  - 클라이언트 연결 수락                                         │
+├─────────────────────────────────────────────────────────────────┤
+│  DebugHttpConnection                                            │
+│  - HTTP 요청 파싱                                               │
+│  - HTML/JSON/SSE 응답                                           │
+├──────────────────┬──────────────────────────────────────────────┤
+│  HtmlGenerator   │  DebugInfoProvider                           │
+│  - HTML 대시보드 │  - JSON 데이터 생성                          │
+│  - CSS 스타일링  │  - 에뮬레이터 상태 수집                      │
+│  - 네비게이션    │  - 스레드 안전 (mutex)                       │
+└──────────────────┴──────────────────────────────────────────────┘
+```
+
+### 6.3 파일 구조
+
+| 파일 | 크기 | 설명 |
+|------|------|------|
+| DebugHttpServer.hh/cc | 1.6KB + 3.0KB | 메인 서버 코디네이터 |
+| DebugHttpServerPort.hh/cc | 2.2KB + 3.6KB | 포트별 리스너 |
+| DebugHttpConnection.hh/cc | 2.4KB + 9.9KB | 클라이언트 연결 처리 |
+| DebugInfoProvider.hh/cc | 1.7KB + 11.5KB | JSON 데이터 생성 |
+| HtmlGenerator.hh/cc | 1.9KB + 26.5KB | HTML 대시보드 생성 |
+
+### 6.4 포트 할당
+
+| 포트 | 타입 | 정보 |
+|------|------|------|
+| 65501 | MACHINE | 슬롯, 드라이브, 카트리지 |
+| 65502 | IO | I/O 포트 읽기/쓰기 활동 |
+| 65503 | CPU | 레지스터, 플래그, PC |
+| 65504 | MEMORY | 메모리 덤프/검사 |
+
+### 6.5 HTTP 엔드포인트
+
+| 경로 | 응답 형식 | 설명 |
+|------|-----------|------|
+| `/` | HTML | 시각적 대시보드 |
+| `/info` | HTML/JSON | Accept 헤더에 따라 결정 |
+| `/api` | JSON | API 엔드포인트 |
+| `/stream` | SSE | 실시간 스트리밍 |
+
+### 6.6 주요 클래스
+
+#### DebugHttpServer
+
+```cpp
+class DebugHttpServer {
+public:
+    explicit DebugHttpServer(Reactor& reactor);
+    ~DebugHttpServer();
+
+    void setEnable(bool enable);
+    [[nodiscard]] bool isEnabled() const;
+
+private:
+    void startServers();
+    void stopServers();
+
+    std::array<std::unique_ptr<DebugHttpServerPort>, 4> ports;
+    std::unique_ptr<DebugInfoProvider> infoProvider;
+
+    BooleanSetting enableSetting;
+    IntegerSetting machinePortSetting;
+    IntegerSetting ioPortSetting;
+    IntegerSetting cpuPortSetting;
+    IntegerSetting memoryPortSetting;
+};
+```
+
+#### DebugInfoProvider
+
+```cpp
+class DebugInfoProvider {
+public:
+    explicit DebugInfoProvider(Reactor& reactor);
+
+    [[nodiscard]] std::string getMachineInfo();
+    [[nodiscard]] std::string getIOInfo();
+    [[nodiscard]] std::string getCPUInfo();
+    [[nodiscard]] std::string getMemoryInfo(unsigned start, unsigned size);
+
+private:
+    Reactor& reactor;
+    mutable std::mutex mutex;
+};
+```
+
+#### HtmlGenerator
+
+```cpp
+class HtmlGenerator {
+public:
+    static std::string generateMachinePage(DebugInfoProvider& provider);
+    static std::string generateIOPage(DebugInfoProvider& provider);
+    static std::string generateCPUPage(DebugInfoProvider& provider);
+    static std::string generateMemoryPage(DebugInfoProvider& provider,
+                                           unsigned start, unsigned size);
+
+    static std::string generatePage(DebugInfoType type,
+                                     DebugInfoProvider& provider,
+                                     unsigned memStart = 0,
+                                     unsigned memSize = 256);
+private:
+    static std::string wrapPage(const std::string& title,
+                                const std::string& content,
+                                DebugInfoType activeTab);
+    static std::string getCSS();
+    static std::string getNavigation(DebugInfoType activeTab);
+};
+```
+
+### 6.7 사용 방법
+
+```tcl
+# TCL 콘솔에서 활성화
+set debug_http_enable on
+
+# 브라우저에서 접속
+# http://127.0.0.1:65501/  (Machine)
+# http://127.0.0.1:65502/  (I/O)
+# http://127.0.0.1:65503/  (CPU)
+# http://127.0.0.1:65504/  (Memory)
+```
+
+---
+
+## 7. 브레이크포인트 시스템
+
+### 7.1 브레이크포인트 타입
+
+```cpp
+// 주소 기반 브레이크포인트
 class BreakPoint final : public BreakPointBase<BreakPoint> {
-public:
     static constexpr std::string_view prefix = "bp#";
-
     std::optional<uint16_t> getAddress() const;
-    TclObject getAddressString() const;
-
-    void setAddress(Interpreter& interp, const TclObject& addr);
-    void evaluateAddress(Interpreter& interp);  // Tcl 표현식 평가
-
-private:
-    TclObject addrStr;
-    std::optional<uint16_t> address;  // 평가된 주소
 };
-```
 
-**특징:**
-- Tcl 표현식으로 동적 주소 지정 가능 (예: `[reg PC] + 0x100`)
-- 주소 평가 실패 시 `std::optional` 사용
-
-#### 2.3.3 WatchPoint (`src/cpu/WatchPoint.hh`)
-
-메모리/IO 감시 포인트입니다.
-
-```cpp
+// 메모리/IO 워치포인트
 class WatchPoint final : public BreakPointBase<WatchPoint> {
-public:
     static constexpr std::string_view prefix = "wp#";
-
     enum class Type : uint8_t {
-        READ_IO,    // I/O 포트 읽기
-        WRITE_IO,   // I/O 포트 쓰기
-        READ_MEM,   // 메모리 읽기
-        WRITE_MEM   // 메모리 쓰기
+        READ_IO, WRITE_IO, READ_MEM, WRITE_MEM
     };
-
-    Type getType() const;
-    auto getBeginAddress() const;
-    auto getEndAddress() const;
-
-    // I/O 감시 등록/해제
-    void registerIOWatch(MSXMotherBoard& motherBoard,
-                         std::span<MSXDevice*, 256> devices);
-    void unregisterIOWatch(std::span<MSXDevice*, 256> devices);
-
-private:
-    Type type = Type::WRITE_MEM;
-    TclObject beginAddrStr, endAddrStr;
-    std::optional<uint16_t> beginAddr, endAddr;  // [begin, end] 범위
-
-    std::vector<std::unique_ptr<MSXWatchIODevice>> ios;
 };
-```
 
-**I/O 워치 구현:**
-```cpp
-class MSXWatchIODevice final : public MSXMultiDevice {
-    uint8_t readIO(uint16_t port, EmuTime time) override;
-    void writeIO(uint16_t port, uint8_t value, EmuTime time) override;
-
-private:
-    WatchPoint& wp;
-    MSXDevice* device = nullptr;  // 래핑된 실제 장치
-};
-```
-
-I/O 워치는 실제 장치를 래핑하여 읽기/쓰기를 가로챕니다.
-
-#### 2.3.4 DebugCondition (`src/cpu/DebugCondition.hh`)
-
-주소와 무관한 조건부 중단점입니다.
-
-```cpp
+// 조건부 중단
 class DebugCondition final : public BreakPointBase<DebugCondition> {
-public:
     static constexpr std::string_view prefix = "cond#";
-    // BreakPointBase의 condition과 command만 사용
 };
 ```
 
-### 2.4 MSXCPUInterface - 브레이크포인트 관리
+### 7.2 브레이크포인트 검사 흐름
 
-```cpp
-class MSXCPUInterface {
-public:
-    // 브레이크포인트 관리
-    void insertBreakPoint(BreakPoint bp);
-    void removeBreakPoint(const BreakPoint& bp);
-    void removeBreakPoint(unsigned id);
-    static BreakPoints& getBreakPoints();  // 정적 컨테이너
-
-    // 워치포인트 관리
-    void setWatchPoint(const std::shared_ptr<WatchPoint>& watchPoint);
-    void removeWatchPoint(std::shared_ptr<WatchPoint> watchPoint);
-    const WatchPoints& getWatchPoints() const;
-
-    // 디버그 조건 관리
-    void setCondition(DebugCondition cond);
-    void removeCondition(const DebugCondition& cond);
-    static Conditions& getConditions();
-
-    // 브레이크 상태
-    static bool isBreaked();
-    void doBreak();
-    void doContinue();
-    void doStep();
-
-    // 브레이크포인트 검사 (CPU 루프에서 호출)
-    static bool anyBreakPoints();
-    bool checkBreakPoints(unsigned pc);
-
-private:
-    static inline BreakPoints breakPoints;  // 정렬되지 않음
-    WatchPoints watchPoints;                // 생성 순서
-    static inline Conditions conditions;    // 생성 순서
-    static inline bool breaked = false;
-};
-```
-
-**브레이크포인트 검사 흐름:**
 ```
 CPU 명령 실행
     │
@@ -359,173 +504,35 @@ checkBreakPoints(PC)
 
 ---
 
-## 3. 메모리 디버거 분석
+## 8. 디버거 UI (ImGui)
 
-### 3.1 Debuggable 인터페이스
+### 8.1 주요 UI 컴포넌트
 
-```cpp
-class Debuggable {
-public:
-    virtual unsigned getSize() const = 0;
-    virtual std::string_view getDescription() const = 0;
-    virtual uint8_t read(unsigned address) = 0;
-    virtual void write(unsigned address, uint8_t value) = 0;
+| 클래스 | 기능 |
+|--------|------|
+| ImGuiDebugger | 메인 디버거 창 (제어, 레지스터, 스택) |
+| ImGuiBreakPoints | 브레이크포인트 관리 UI |
+| ImGuiDisassembly | 디스어셈블리 뷰 |
+| DebuggableEditor | 헥스 에디터 |
 
-    // 블록 읽기 (기본 구현 제공)
-    virtual void readBlock(unsigned start, std::span<uint8_t> output);
-};
-```
-
-**주요 Debuggable 구현체:**
-
-| 클래스 | 설명 | 크기 |
-|--------|------|------|
-| `MemoryDebug` | 현재 슬롯의 64KB 메모리 | 0x10000 |
-| `SlottedMemoryDebug` | 모든 슬롯의 메모리 | 0x10000 * 16 |
-| `IODebug` | I/O 포트 | 0x100 |
-| `MSXCPU::Debuggable` | CPU 레지스터 | ~28 바이트 |
-
-### 3.2 SimpleDebuggable
-
-Debuggable의 편의 구현체입니다.
-
-```cpp
-class SimpleDebuggable : public Debuggable {
-public:
-    unsigned getSize() const final;
-    std::string_view getDescription() const final;
-
-    uint8_t read(unsigned address) override;
-    uint8_t read(unsigned address, EmuTime time);  // 시간 기반
-    void write(unsigned address, uint8_t value) override;
-    void write(unsigned address, uint8_t value, EmuTime time);
-
-    const std::string& getName() const;
-
-protected:
-    SimpleDebuggable(MSXMotherBoard& motherBoard,
-                     std::string name,
-                     static_string_view description,
-                     unsigned size);
-    ~SimpleDebuggable();  // 자동 등록 해제
-};
-```
-
-### 3.3 MSXCPUInterface 메모리 디버깅
-
-```cpp
-class MSXCPUInterface {
-    // 메모리 읽기 (캐시 사용)
-    uint8_t readMem(uint16_t address, EmuTime time) {
-        if (disallowReadCache[address >> CacheLine::BITS]) {
-            return readMemSlow(address, time);  // 워치포인트 등
-        }
-        return visibleDevices[address >> 14]->readMem(address, time);
-    }
-
-    // 피크 (부작용 없는 읽기)
-    uint8_t peekMem(uint16_t address, EmuTime time) const;
-    uint8_t peekSlottedMem(unsigned address, EmuTime time) const;
-
-    // 슬롯 지정 읽기/쓰기
-    uint8_t readSlottedMem(unsigned address, EmuTime time);
-    void writeSlottedMem(unsigned address, uint8_t value, EmuTime time);
-
-private:
-    // 디버거블
-    struct MemoryDebug final : SimpleDebuggable { /* ... */ };
-    struct SlottedMemoryDebug final : SimpleDebuggable { /* ... */ };
-    struct IODebug final : SimpleDebuggable { /* ... */ };
-
-    // 워치포인트 비트셋
-    std::array<std::bitset<CacheLine::SIZE>, CacheLine::NUM> readWatchSet;
-    std::array<std::bitset<CacheLine::SIZE>, CacheLine::NUM> writeWatchSet;
-
-    // 캐시 비활성화 플래그
-    std::array<uint8_t, CacheLine::NUM> disallowReadCache;
-    std::array<uint8_t, CacheLine::NUM> disallowWriteCache;
-};
-```
-
-### 3.4 CheckedRam - 미초기화 메모리 탐지
-
-```cpp
-class CheckedRam final : private Observer<Setting> {
-public:
-    uint8_t read(size_t addr);   // 초기화 검사 포함
-    uint8_t peek(size_t addr) const;  // 검사 없음
-    void write(size_t addr, uint8_t value);
-
-    const uint8_t* getReadCacheLine(size_t addr) const;
-    uint8_t* getWriteCacheLine(size_t addr);
-
-    Ram& getUncheckedRam();  // 검사 없는 직접 접근
-
-private:
-    std::vector<bool> completely_initialized_cacheline;
-    std::vector<std::bitset<CacheLine::SIZE>> uninitialized;
-    Ram ram;
-    TclCallback umrCallback;  // 미초기화 읽기 콜백
-};
-```
-
-**동작 원리:**
-1. 쓰기 시 해당 바이트를 초기화됨으로 표시
-2. 읽기 시 미초기화 바이트 접근하면 `umrCallback` 호출
-3. 캐시라인 전체가 초기화되면 `completely_initialized_cacheline`로 빠른 검사
-
-### 3.5 메모리 워치포인트 처리
-
-```cpp
-// MSXCPUInterface.cc
-void MSXCPUInterface::executeMemWatch(WatchPoint::Type type,
-                                       unsigned address,
-                                       unsigned value) {
-    if (fastForward) return;  // 빨리감기 중엔 무시
-
-    for (auto& wp : watchPoints) {
-        if (!wp->getBeginAddress()) continue;
-        if (wp->getType() != type) continue;
-
-        unsigned begin = *wp->getBeginAddress();
-        unsigned end = wp->getEndAddress().value_or(begin);
-
-        if (address >= begin && address <= end) {
-            // Tcl에 $wp_last_address, $wp_last_value 설정
-            if (wp->checkAndExecute(cliComm, interp)) {
-                removeWatchPoint(wp);
-            }
-        }
-    }
-}
-```
-
----
-
-## 4. 디버거 UI 분석 (ImGui)
-
-### 4.1 ImGuiDebugger - 메인 디버거 창
+### 8.2 ImGuiDebugger
 
 ```cpp
 class ImGuiDebugger final : public ImGuiPart {
 public:
     void paint(MSXMotherBoard* motherBoard) override;
-    void showMenu(MSXMotherBoard* motherBoard) override;
 
-    // 이벤트
     void signalBreak();
     void signalContinue();
-    void signalQuit();
     void setGotoTarget(uint16_t target);
 
 private:
-    void drawControl(MSXCPUInterface&, MSXMotherBoard&);  // 제어 버튼
-    void drawSlots(MSXCPUInterface&, Debugger&);          // 슬롯 정보
+    void drawControl(MSXCPUInterface&, MSXMotherBoard&);
+    void drawSlots(MSXCPUInterface&, Debugger&);
     void drawStack(const CPURegs&, const MSXCPUInterface&, EmuTime);
     void drawRegisters(CPURegs&);
     void drawFlags(CPURegs&);
 
-    // 디버그 동작
     void actionBreakContinue(MSXCPUInterface&);
     void actionStepIn(MSXCPUInterface&);
     void actionStepOver();
@@ -535,148 +542,19 @@ private:
 private:
     std::vector<std::unique_ptr<ImGuiDisassembly>> disassemblyViewers;
     std::vector<std::unique_ptr<DebuggableEditor>> hexEditors;
-
-    bool showControl = false;
-    bool showSlots = false;
-    bool showStack = false;
-    bool showRegisters = false;
-    bool showFlags = false;
 };
 ```
-
-### 4.2 ImGuiBreakPoints - 브레이크포인트 관리 UI
-
-```cpp
-class ImGuiBreakPoints final : public ImGuiPart {
-public:
-    void paint(MSXMotherBoard* motherBoard) override;
-    void refreshSymbols();
-    void paintBpTab(MSXCPUInterface& cpuInterface, uint16_t addr);
-
-private:
-    template<typename Type>
-    void paintTab(MSXCPUInterface& cpuInterface,
-                  std::optional<uint16_t> addr = {});
-
-    template<typename Item>
-    void drawRow(MSXCPUInterface& cpuInterface, int row, Item& item);
-
-    std::string displayAddr(const TclObject& addr) const;
-    void editRange(MSXCPUInterface&, std::shared_ptr<WatchPoint>&,
-                   std::string& begin, std::string& end);
-    bool editCondition(ParsedSlotCond& slot);
-};
-```
-
-**슬롯 조건 파싱:**
-```cpp
-struct ParsedSlotCond {
-    std::string rest;      // 나머지 조건
-    int ps = 0;           // 프라이머리 슬롯
-    int ss = 0;           // 세컨더리 슬롯
-    uint8_t seg = 0;      // 세그먼트
-    bool hasPs, hasSs, hasSeg;
-
-    std::string toTclExpression(std::string_view checkCmd) const;
-    std::string toDisplayString() const;
-};
-```
-
-### 4.3 ImGuiDisassembly - 디스어셈블리 뷰
-
-```cpp
-class ImGuiDisassembly final : public ImGuiPart {
-public:
-    void paint(MSXMotherBoard* motherBoard) override;
-    void signalBreak();
-    void setGotoTarget(uint16_t target);
-    void syncWithPC();
-
-    void actionToggleBp(MSXMotherBoard& motherBoard);
-
-private:
-    unsigned disassemble(
-        const MSXCPUInterface& cpuInterface,
-        unsigned addr, unsigned pc, EmuTime time,
-        std::span<uint8_t, 4> opcodes,
-        std::string& mnemonic,
-        std::optional<uint16_t>& mnemonicAddr,
-        std::span<const Symbol* const>& mnemonicLabels);
-
-    void disassembleToClipboard(/*...*/);
-
-private:
-    SymbolManager& symbolManager;
-    std::optional<uint16_t> selectedAddr;
-    std::string gotoAddr;
-    std::string runToAddr;
-    bool followPC = false;
-    bool scrollToPcOnBreak = true;
-};
-```
-
-### 4.4 DebuggableEditor - 헥스 에디터
-
-```cpp
-class DebuggableEditor final : public ImGuiPart {
-public:
-    explicit DebuggableEditor(ImGuiManager& manager,
-                              std::string debuggableName,
-                              size_t index);
-
-    void makeSnapshot(MSXMotherBoard& motherBoard);
-    void makeSnapshot(Debuggable& debuggable);
-    void paint(MSXMotherBoard* motherBoard) override;
-
-private:
-    void drawContents(const Sizes& s, Debuggable& debuggable, unsigned memSize);
-    void drawSearch(const Sizes& s, Debuggable& debuggable, unsigned memSize);
-    void drawPreviewLine(const Sizes& s, Debuggable& debuggable, unsigned memSize);
-    void drawExport(const Sizes& s, Debuggable& debuggable);
-
-private:
-    int columns = 16;
-    bool showAscii = true;
-    bool showSearch = false;
-    bool showDataPreview = false;
-    bool showSymbolInfo = false;
-    bool greyOutZeroes = true;
-
-    std::string searchString;
-    std::vector<uint8_t> snapshot;  // 변경 감지용
-};
-```
-
-**기능:**
-- 16진수/ASCII 뷰
-- 검색 (HEX/ASCII)
-- 데이터 프리뷰 (다양한 타입)
-- 심볼 정보 표시
-- 내보내기 (클립보드/파일)
-- 변경 하이라이트
 
 ---
 
-## 5. 심볼 관리
+## 9. 심볼 관리
 
-### 5.1 SymbolManager (`src/debugger/SymbolManager.hh`)
+### 9.1 SymbolManager
 
 ```cpp
 struct Symbol {
     std::string name;
     uint16_t value;
-    std::optional<uint8_t> slot;
-    std::optional<uint16_t> segment;
-};
-
-struct SymbolFile {
-    enum class Type : uint8_t {
-        AUTO_DETECT,
-        ASMSX, GENERIC, HTC, LINKMAP, NOICE, VASM, WLALINK_NOGMB
-    };
-
-    std::string filename;
-    std::vector<Symbol> symbols;
     std::optional<uint8_t> slot;
     std::optional<uint16_t> segment;
 };
@@ -693,7 +571,6 @@ public:
 
     std::span<Symbol const * const> lookupValue(uint16_t value);
     std::optional<uint16_t> lookupSymbol(std::string_view s) const;
-    std::optional<uint16_t> parseSymbolOrValue(std::string_view s) const;
 
 private:
     std::vector<SymbolFile> files;
@@ -701,7 +578,8 @@ private:
 };
 ```
 
-**지원 심볼 파일 형식:**
+### 9.2 지원 심볼 파일 형식
+
 - ASMSX
 - Generic (PASMO, SJASM, TNIASM)
 - HTC
@@ -712,9 +590,9 @@ private:
 
 ---
 
-## 6. Tcl 디버거 API
+## 10. Tcl 디버거 API
 
-### 6.1 debug 명령어
+### 10.1 debug 명령어
 
 ```tcl
 # 디버거블 관리
@@ -723,171 +601,96 @@ debug desc <debuggable>             # 설명
 debug size <debuggable>             # 크기
 debug read <debuggable> <addr>      # 읽기
 debug write <debuggable> <addr> <value>  # 쓰기
-debug read_block <debuggable> <addr> <size>
-
-# 디스어셈블
-debug disasm <addr>                 # 단일 명령어
-debug disasm_blob <binary>          # 바이너리 데이터
 
 # 브레이크포인트
-debug break                         # 즉시 중단
-debug cont                          # 계속 실행
-debug step                          # 한 단계 실행
-
 debug set_bp <addr> [cond] [cmd]    # BP 설정
 debug remove_bp <id>                # BP 제거
 debug list_bp                       # BP 목록
-
-debug breakpoint create -address <addr> [-condition <cond>] [-command <cmd>]
-debug breakpoint remove <id>
-debug breakpoint configure <id> [-address <addr>] [-enabled <bool>]
 
 # 워치포인트
 debug set_watchpoint <type> <addr> [cond] [cmd]
 debug remove_watchpoint <id>
 debug list_watchpoints
 
-debug watchpoint create -type <type> -address <addr> [-condition <cond>]
-debug watchpoint remove <id>
-
-# 조건
-debug set_condition <cond> [cmd]
-debug remove_condition <id>
-debug list_conditions
-
-debug condition create -condition <cond> [-command <cmd>]
-debug condition remove <id>
-
-# 프로브
-debug probe list                    # 프로브 목록
-debug probe desc <probe>            # 프로브 설명
-debug probe read <probe>            # 프로브 값 읽기
-debug probe set_bp <probe> [cond] [cmd]  # 프로브 BP
-debug probe remove_bp <id>
+# 제어
+debug break                         # 즉시 중단
+debug cont                          # 계속 실행
+debug step                          # 한 단계 실행
 
 # 심볼
-debug symbols types                 # 지원 파일 형식
 debug symbols load <file> [type]    # 심볼 파일 로드
 debug symbols remove <file>         # 심볼 파일 제거
-debug symbols files                 # 로드된 파일 목록
 debug symbols lookup <name|value>   # 심볼 검색
 ```
 
 ---
 
-## 7. 디버거 아키텍처 다이어그램
+## 11. 빌드 시스템
 
-```
-┌─────────────────────────────────────────────────────────────────────┐
-│                           UI Layer (ImGui)                          │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────────────┐ │
-│  │ImGuiDebugger │ │ImGuiBreak    │ │ImGuiDisasm   │ │Debuggable   │ │
-│  │(Control/Regs)│ │Points        │ │              │ │Editor       │ │
-│  └──────┬───────┘ └──────┬───────┘ └──────┬───────┘ └──────┬──────┘ │
-└─────────┼────────────────┼────────────────┼─────────────────┼───────┘
-          │                │                │                 │
-          ▼                ▼                ▼                 ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Debugger Core                                │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │                    Debugger (Tcl Command)                      │ │
-│  │  - Debuggable 등록/관리                                        │ │
-│  │  - Probe 등록/관리                                             │ │
-│  │  - ProbeBreakPoint 관리                                        │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-│                                                                      │
-│  ┌──────────────────┐  ┌──────────────────┐  ┌──────────────────┐   │
-│  │   BreakPoint     │  │   WatchPoint     │  │  DebugCondition  │   │
-│  │   (주소 기반)    │  │   (메모리/IO)    │  │   (조건만)       │   │
-│  └────────┬─────────┘  └────────┬─────────┘  └────────┬─────────┘   │
-│           │                     │                     │              │
-│           └─────────────────────┼─────────────────────┘              │
-│                                 ▼                                    │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │                     MSXCPUInterface                            │ │
-│  │  - static BreakPoints                                          │ │
-│  │  - WatchPoints                                                 │ │
-│  │  - static Conditions                                           │ │
-│  │  - checkBreakPoints(pc) - CPU 루프에서 호출                    │ │
-│  │  - doBreak() / doContinue() / doStep()                        │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-│                                                                      │
-│  ┌──────────────────────────────────────────────────────────────┐   │
-│  │                     SymbolManager                             │   │
-│  │  - 심볼 파일 로드/관리                                        │   │
-│  │  - 주소 ↔ 심볼 검색                                          │   │
-│  └──────────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                          CPU Layer                                   │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │                         MSXCPU                                 │ │
-│  │  ┌─────────────────────┐  ┌─────────────────────┐              │ │
-│  │  │  CPUCore<Z80TYPE>   │  │  CPUCore<R800TYPE>  │              │ │
-│  │  │  - execute()        │  │  - execute()        │              │ │
-│  │  │  - exitCPULoopSync  │  │  - exitCPULoopAsync │              │ │
-│  │  └──────────┬──────────┘  └──────────┬──────────┘              │ │
-│  │             │                        │                          │ │
-│  │             └────────────┬───────────┘                          │ │
-│  │                          ▼                                      │ │
-│  │  ┌────────────────────────────────────────────────────────────┐│ │
-│  │  │                      CPURegs                               ││ │
-│  │  │  AF, BC, DE, HL, IX, IY, SP, PC                           ││ │
-│  │  │  AF', BC', DE', HL', I, R, IM, IFF1, IFF2                 ││ │
-│  │  └────────────────────────────────────────────────────────────┘│ │
-│  └────────────────────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
-          │
-          ▼
-┌─────────────────────────────────────────────────────────────────────┐
-│                        Memory Layer                                  │
-│  ┌────────────────────────────────────────────────────────────────┐ │
-│  │                    Debuggable Interface                        │ │
-│  └────────────────────────────────────────────────────────────────┘ │
-│                                                                      │
-│  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌─────────────┐ │
-│  │ MemoryDebug  │ │SlottedMemory │ │   IODebug    │ │ CheckedRam  │ │
-│  │ (64KB view)  │ │Debug(all slt)│ │  (256 ports) │ │ (UMR detect)│ │
-│  └──────────────┘ └──────────────┘ └──────────────┘ └─────────────┘ │
-└─────────────────────────────────────────────────────────────────────┘
-```
+### 11.1 빌드 플레이버
+
+| 플레이버 | 설명 |
+|----------|------|
+| opt | 일반 최적화 (기본값) |
+| devel | 개발용 (assert, 디버그 심볼) |
+| debug | 디버그용 (최적화 없음) |
+| lto | 링크 타임 최적화 |
+
+### 11.2 지원 플랫폼
+
+- Linux
+- macOS (Darwin)
+- Windows (MinGW, MSVC)
+- FreeBSD, OpenBSD, NetBSD
+- Android
+
+### 11.3 의존성
+
+**필수:**
+- C++23 컴파일러 (GCC 12+, Clang 17+)
+- SDL2, SDL2_ttf
+- libpng, zlib
+- Tcl 8.6+
+- POSIX threads
+
+**선택:**
+- OpenGL + GLEW (하드웨어 렌더링)
+- Ogg + Theora + Vorbis (Laserdisc)
+- ALSA (Linux MIDI)
 
 ---
 
-## 8. 주요 설계 패턴
+## 12. 설계 패턴
 
-### 8.1 CRTP (Curiously Recurring Template Pattern)
+### 12.1 CRTP (Curiously Recurring Template Pattern)
+
 `BreakPointBase<Derived>`에서 사용:
 - ID 생성 및 문자열화
 - 조건 검사 및 명령 실행 공통 로직
 
-### 8.2 Observer Pattern
+### 12.2 Observer Pattern
+
 - `MSXCPU` → `Setting` 변경 감시
 - `CheckedRam` → 설정 변경 감시
 - `SymbolObserver` → 심볼 변경 알림
 
-### 8.3 Wrapper Pattern
-`MSXWatchIODevice`가 실제 I/O 장치를 래핑하여 감시
+### 12.3 Template Method
 
-### 8.4 Template Method
-`SimpleDebuggable`의 시간 기반/비기반 read/write 변형
+- `CPUCore<T>` - Z80/R800 추상화
+- `SimpleDebuggable` - 시간 기반 read/write 변형
 
-### 8.5 Singleton-like Static State
-```cpp
-// MSXCPUInterface
-static inline BreakPoints breakPoints;
-static inline Conditions conditions;
-static inline bool breaked = false;
-```
-모든 MSX 머신 간 공유되는 디버거 상태
+### 12.4 Factory Pattern
+
+- 장치 팩토리 생성
+- 카트리지 감지 및 인스턴스화
+- 렌더러 팩토리 (SDL, OpenGL)
 
 ---
 
-## 9. 성능 최적화
+## 13. 성능 최적화
 
-### 9.1 메모리 캐시 라인
+### 13.1 메모리 캐시 라인
+
 ```cpp
 namespace CacheLine {
     static constexpr unsigned BITS = 8;
@@ -896,7 +699,8 @@ namespace CacheLine {
 }
 ```
 
-### 9.2 빠른 경로 / 느린 경로
+### 13.2 빠른 경로 / 느린 경로
+
 ```cpp
 uint8_t readMem(uint16_t address, EmuTime time) {
     if (disallowReadCache[address >> BITS]) [[unlikely]] {
@@ -906,7 +710,8 @@ uint8_t readMem(uint16_t address, EmuTime time) {
 }
 ```
 
-### 9.3 Fast-Forward 모드
+### 13.3 Fast-Forward 모드
+
 ```cpp
 void setFastForward(bool fastForward_) { fastForward = fastForward_; }
 // fastForward 중에는 브레이크포인트 무시
@@ -914,7 +719,7 @@ void setFastForward(bool fastForward_) { fastForward = fastForward_; }
 
 ---
 
-## 10. 결론
+## 14. 결론
 
 openMSX의 디버거 시스템은 다음과 같은 특징을 가집니다:
 
@@ -924,5 +729,11 @@ openMSX의 디버거 시스템은 다음과 같은 특징을 가집니다:
 4. **심볼 지원**: 다양한 어셈블러 형식의 심볼 파일 지원
 5. **성능 고려**: 캐시 라인, fast-forward 모드, 조건부 느린 경로
 6. **확장성**: Debuggable 인터페이스로 새 디버깅 대상 추가 용이
+7. **HTTP 디버그 서버** (Fork 추가): 웹 브라우저를 통한 실시간 디버깅
 
-이 디버거는 MSX 개발자가 어셈블리 레벨에서 프로그램을 분석하고 디버깅하는 데 필요한 모든 기능을 제공합니다.
+이 에뮬레이터는 MSX 개발자가 어셈블리 레벨에서 프로그램을 분석하고 디버깅하는 데 필요한 모든 기능을 제공합니다.
+
+---
+
+*마지막 업데이트: 2025-12-27*
+*Fork: https://github.com/onionmixer/openMSX*
