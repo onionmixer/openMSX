@@ -6,6 +6,7 @@
 #include "Command.hh"
 #include "CommandException.hh"
 #include "CommandLineParser.hh"
+#include "DebugHttpServer.hh"
 #include "DiskChanger.hh"
 #include "DiskFactory.hh"
 #include "DiskManipulator.hh"
@@ -294,6 +295,8 @@ void Reactor::init()
 		getOpenMSXInfoCommand(), *this);
 	tclCallbackMessages = std::make_unique<TclCallbackMessages>(
 		*globalCliComm, *globalCommandController);
+
+	debugHttpServer = std::make_unique<DebugHttpServer>(*this);
 
 	createDefaultMachineAndSetupSettings();
 

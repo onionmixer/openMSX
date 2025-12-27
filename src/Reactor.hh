@@ -25,6 +25,7 @@ class CommandController;
 class CommandLineParser;
 class ConfigInfo;
 class CreateMachineCommand;
+class DebugHttpServer;
 class DeleteMachineCommand;
 class DiskChanger;
 class DiskFactory;
@@ -207,6 +208,8 @@ private:
 	std::unique_ptr<RealTimeInfo> realTimeInfo;
 	std::unique_ptr<SoftwareInfoTopic> softwareInfoTopic;
 	std::unique_ptr<TclCallbackMessages> tclCallbackMessages;
+
+	std::unique_ptr<DebugHttpServer> debugHttpServer;
 
 	// Locking rules for activeBoard access:
 	//  - main thread can always access activeBoard without taking a lock
