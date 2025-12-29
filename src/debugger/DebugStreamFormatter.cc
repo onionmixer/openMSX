@@ -5,6 +5,7 @@
 #include "MSXCPU.hh"
 #include "CPURegs.hh"
 #include "MSXCPUInterface.hh"
+#include "MSXDevice.hh"
 #include "HardwareConfig.hh"
 
 #include <chrono>
@@ -120,13 +121,17 @@ std::vector<std::string> DebugStreamFormatter::getFullSnapshot()
 	std::lock_guard<std::mutex> lock(accessMutex);
 	std::vector<std::string> lines;
 
+	// ===== System timestamp (NEW - from 65501) =====
+	lines.push_back(formatLine("sys", "info", "timestamp",
+		std::to_string(getTimestamp())));
+
 	MSXMotherBoard* board = getMotherBoard();
 	if (!board) {
 		lines.push_back(formatLine("mach", "info", "status", "no_machine"));
 		return lines;
 	}
 
-	// Machine info
+	// ===== Machine info =====
 	lines.push_back(formatLine("mach", "info", "id",
 		std::string(board->getMachineID())));
 	lines.push_back(formatLine("mach", "info", "name",
@@ -136,12 +141,25 @@ std::vector<std::string> DebugStreamFormatter::getFullSnapshot()
 	lines.push_back(formatLine("mach", "info", "status",
 		board->isPowered() ? "running" : "powered_off"));
 
-	// CPU type
+	// ===== Extensions (NEW - from 65501) =====
+	const auto& extensions = board->getExtensions();
+	int extIdx = 0;
+	for (const auto& ext : extensions) {
+		std::string idxStr = std::to_string(extIdx);
+		lines.push_back(formatLine("mach", "ext", idxStr.c_str(),
+			std::string(ext->getName())));
+		extIdx++;
+	}
+	// Also add extension count for convenience
+	lines.push_back(formatLine("mach", "ext", "count",
+		std::to_string(extensions.size())));
+
+	// ===== CPU type =====
 	auto& cpu = board->getCPU();
 	lines.push_back(formatLine("cpu", "info", "type",
 		cpu.isR800Active() ? "R800" : "Z80"));
 
-	// CPU registers (without lock since we already hold it)
+	// ===== CPU registers =====
 	auto& regs = cpu.getRegisters();
 
 	lines.push_back(formatLine("cpu", "reg", "af", toHex16(regs.getAF())));
@@ -159,7 +177,17 @@ std::vector<std::string> DebugStreamFormatter::getFullSnapshot()
 	lines.push_back(formatLine("cpu", "reg", "i", toHex8(regs.getI())));
 	lines.push_back(formatLine("cpu", "reg", "r", toHex8(regs.getR())));
 
-	// Flags
+	// ===== Individual 8-bit registers (NEW - from 65501) =====
+	lines.push_back(formatLine("cpu", "reg8", "a", toHex8(regs.getA())));
+	lines.push_back(formatLine("cpu", "reg8", "f", toHex8(regs.getF())));
+	lines.push_back(formatLine("cpu", "reg8", "b", toHex8(regs.getB())));
+	lines.push_back(formatLine("cpu", "reg8", "c", toHex8(regs.getC())));
+	lines.push_back(formatLine("cpu", "reg8", "d", toHex8(regs.getD())));
+	lines.push_back(formatLine("cpu", "reg8", "e", toHex8(regs.getE())));
+	lines.push_back(formatLine("cpu", "reg8", "h", toHex8(regs.getH())));
+	lines.push_back(formatLine("cpu", "reg8", "l", toHex8(regs.getL())));
+
+	// ===== Flags =====
 	uint8_t f = regs.getF();
 	std::string flagStr;
 	flagStr += (f & 0x80) ? 'S' : '-';  // Sign
@@ -170,9 +198,18 @@ std::vector<std::string> DebugStreamFormatter::getFullSnapshot()
 	flagStr += (f & 0x04) ? 'P' : '-';  // Parity/Overflow
 	flagStr += (f & 0x02) ? 'N' : '-';  // Subtract
 	flagStr += (f & 0x01) ? 'C' : '-';  // Carry
-	lines.push_back(formatLine("cpu", "flags", "all", flagStr));
+	lines.push_back(formatLine("cpu", "flags", "all", flagStr,
+		{{"raw", toHex8(f)}}));
 
-	// Interrupt state
+	// ===== Individual flags (NEW - from 65501) =====
+	lines.push_back(formatLine("cpu", "flag", "s", (f & 0x80) ? "1" : "0"));
+	lines.push_back(formatLine("cpu", "flag", "z", (f & 0x40) ? "1" : "0"));
+	lines.push_back(formatLine("cpu", "flag", "h", (f & 0x10) ? "1" : "0"));
+	lines.push_back(formatLine("cpu", "flag", "pv", (f & 0x04) ? "1" : "0"));
+	lines.push_back(formatLine("cpu", "flag", "n", (f & 0x02) ? "1" : "0"));
+	lines.push_back(formatLine("cpu", "flag", "c", (f & 0x01) ? "1" : "0"));
+
+	// ===== Interrupt state =====
 	lines.push_back(formatLine("cpu", "int", "iff1",
 		regs.getIFF1() ? "1" : "0"));
 	lines.push_back(formatLine("cpu", "int", "iff2",
@@ -182,7 +219,7 @@ std::vector<std::string> DebugStreamFormatter::getFullSnapshot()
 	lines.push_back(formatLine("cpu", "int", "halt",
 		regs.getHALT() ? "1" : "0"));
 
-	// Slot mapping
+	// ===== Slot mapping with device names (ENHANCED - from 65501) =====
 	auto& cpuInterface = board->getCPUInterface();
 	for (int page = 0; page < 4; ++page) {
 		int ps = cpuInterface.getPrimarySlot(page);
@@ -194,9 +231,27 @@ std::vector<std::string> DebugStreamFormatter::getFullSnapshot()
 			slotStr += "-" + std::to_string(ss);
 		}
 		std::string pageField = "page" + std::to_string(page);
+
+		// Build extra fields with device name
+		std::map<std::string, std::string> extra;
+		extra["addr"] = toHex16(static_cast<uint16_t>(page * 0x4000));
+		extra["expanded"] = expanded ? "1" : "0";
+
+		// Get device name for this slot (NEW - from 65501)
+		MSXDevice* device = cpuInterface.getVisibleMSXDevice(page);
+		if (device) {
+			extra["device"] = std::string(device->getName());
+		}
+
 		lines.push_back(formatLine("mem", "slot", pageField.c_str(),
-			slotStr,
-			{{"addr", toHex16(static_cast<uint16_t>(page * 0x4000))}}));
+			slotStr, extra));
+	}
+
+	// ===== Slot expansion status (NEW - from 65501) =====
+	for (int ps = 0; ps < 4; ++ps) {
+		std::string slotField = "slot" + std::to_string(ps);
+		lines.push_back(formatLine("mem", "expanded", slotField.c_str(),
+			cpuInterface.isExpanded(ps) ? "1" : "0"));
 	}
 
 	return lines;
