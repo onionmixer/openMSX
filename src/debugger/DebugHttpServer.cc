@@ -2,6 +2,8 @@
 
 #include "DebugHttpServerPort.hh"
 #include "DebugInfoProvider.hh"
+#include "DebugStreamFormatter.hh"
+#include "DebugTelnetServer.hh"
 #include "Reactor.hh"
 
 #include "CommandController.hh"
@@ -11,11 +13,12 @@ namespace openmsx {
 DebugHttpServer::DebugHttpServer(Reactor& reactor_)
 	: reactor(reactor_)
 	, infoProvider(std::make_unique<DebugInfoProvider>(reactor_))
+	, streamFormatter(std::make_unique<DebugStreamFormatter>(reactor_))
 	, enableSetting(
 		reactor_.getCommandController(),
 		"debug_http_enable",
 		"Enable HTTP debug server for real-time debugging information",
-		false, Setting::Save::YES)
+		true, Setting::Save::YES)
 	, machinePortSetting(
 		reactor_.getCommandController(),
 		"debug_http_machine_port",
@@ -36,31 +39,69 @@ DebugHttpServer::DebugHttpServer(Reactor& reactor_)
 		"debug_http_memory_port",
 		"Port number for memory info HTTP server",
 		65504, 1024, 65535, Setting::Save::YES)
+	, streamEnableSetting(
+		reactor_.getCommandController(),
+		"debug_stream_enable",
+		"Enable debug stream server (Telnet, JSON Lines format)",
+		true, Setting::Save::YES)
+	, streamPortSetting(
+		reactor_.getCommandController(),
+		"debug_stream_port",
+		"Port number for debug stream server",
+		65505, 1024, 65535, Setting::Save::YES)
 {
-	// Attach observers
+	// Attach observers for HTTP servers
 	enableSetting.attach(*this);
 	machinePortSetting.attach(*this);
 	ioPortSetting.attach(*this);
 	cpuPortSetting.attach(*this);
 	memoryPortSetting.attach(*this);
 
+	// Attach observers for stream server
+	streamEnableSetting.attach(*this);
+	streamPortSetting.attach(*this);
+
 	// Start servers if enabled
 	if (enableSetting.getBoolean()) {
 		startServers();
+	}
+
+	// Start stream server if enabled
+	if (streamEnableSetting.getBoolean()) {
+		try {
+			streamServer = std::make_unique<DebugTelnetServer>(
+				streamPortSetting.getInt(), *streamFormatter);
+			streamServer->start();
+			streamServerRunning = true;
+		} catch (...) {
+			streamServer.reset();
+			streamServerRunning = false;
+		}
 	}
 }
 
 DebugHttpServer::~DebugHttpServer()
 {
-	// Detach observers
+	// Detach HTTP server observers
 	memoryPortSetting.detach(*this);
 	cpuPortSetting.detach(*this);
 	ioPortSetting.detach(*this);
 	machinePortSetting.detach(*this);
 	enableSetting.detach(*this);
 
-	// Stop servers
+	// Detach stream server observers
+	streamPortSetting.detach(*this);
+	streamEnableSetting.detach(*this);
+
+	// Stop HTTP servers
 	stopServers();
+
+	// Stop stream server
+	if (streamServer) {
+		streamServer->stop();
+		streamServer.reset();
+	}
+	streamServerRunning = false;
 }
 
 void DebugHttpServer::startServers()
@@ -121,6 +162,41 @@ void DebugHttpServer::update(const Setting& setting) noexcept
 	    &setting == &memoryPortSetting) {
 		updateServers();
 	}
+
+	if (&setting == &streamEnableSetting ||
+	    &setting == &streamPortSetting) {
+		// Update stream server
+		if (streamServer) {
+			streamServer->stop();
+			streamServer.reset();
+		}
+		streamServerRunning = false;
+
+		if (streamEnableSetting.getBoolean()) {
+			try {
+				streamServer = std::make_unique<DebugTelnetServer>(
+					streamPortSetting.getInt(), *streamFormatter);
+				streamServer->start();
+				streamServerRunning = true;
+			} catch (...) {
+				streamServer.reset();
+				streamServerRunning = false;
+			}
+		}
+	}
+}
+
+void DebugHttpServer::broadcastStreamData(const std::string& data)
+{
+	if (streamServer && streamServerRunning) {
+		streamServer->broadcast(data);
+	}
+}
+
+bool DebugHttpServer::isStreamingActive() const
+{
+	return streamServerRunning && streamServer &&
+	       streamServer->getClientCount() > 0;
 }
 
 } // namespace openmsx
