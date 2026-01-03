@@ -231,7 +231,39 @@
 {"emu":"msx","cat":"mem","sec":"dump","fld":"data","val":"F3EDA0210080","addr":"0000","len":6}
 ```
 
-### 5.4 뱅크/슬롯 정보 (`sec: "bank"`)
+### 5.4 Zero Page 덤프 (`sec: "zp"`) - AppleWin
+```json
+{"emu":"apple","cat":"mem","sec":"zp","fld":"data","val":"00 00 00 00 FF FF 20 30 ...","addr":"0000","len":"16"}
+{"emu":"apple","cat":"mem","sec":"zp","fld":"data","val":"A9 00 85 00 A9 20 85 01 ...","addr":"0010","len":"16"}
+```
+
+### 5.5 Stack Page 덤프 (`sec: "stackpage"`) - AppleWin
+```json
+{"emu":"apple","cat":"mem","sec":"stackpage","fld":"data","val":"00 00 C6 00 C7 00 ...","addr":"0100","len":"16"}
+{"emu":"apple","cat":"mem","sec":"stackpage","fld":"data","val":"00 00 00 00 00 00 ...","addr":"0110","len":"16"}
+```
+
+### 5.6 메모리 플래그 (`sec: "flag"`) - AppleWin
+```json
+{"emu":"apple","cat":"mem","sec":"flag","fld":"80store","val":"0"}
+{"emu":"apple","cat":"mem","sec":"flag","fld":"auxRead","val":"0"}
+{"emu":"apple","cat":"mem","sec":"flag","fld":"auxWrite","val":"0"}
+{"emu":"apple","cat":"mem","sec":"flag","fld":"altZP","val":"0"}
+{"emu":"apple","cat":"mem","sec":"flag","fld":"highRam","val":"1"}
+{"emu":"apple","cat":"mem","sec":"flag","fld":"bank2","val":"1"}
+{"emu":"apple","cat":"mem","sec":"flag","fld":"writeRam","val":"0"}
+{"emu":"apple","cat":"mem","sec":"flag","fld":"page2","val":"0"}
+{"emu":"apple","cat":"mem","sec":"flag","fld":"hires","val":"0"}
+```
+
+### 5.7 텍스트 화면 덤프 (`sec: "text"`) - AppleWin
+```json
+{"emu":"apple","cat":"mem","sec":"text","fld":"page","val":"1"}
+{"emu":"apple","cat":"mem","sec":"text","fld":"row","val":"APPLE ][                               ","idx":"0","addr":"0400"}
+{"emu":"apple","cat":"mem","sec":"text","fld":"row","val":"]                                      ","idx":"1","addr":"0480"}
+```
+
+### 5.8 뱅크/슬롯 정보 (`sec: "bank"`)
 
 #### AppleWin (뱅크 스위칭)
 ```json
@@ -281,6 +313,14 @@
 {"emu":"msx","cat":"io","sec":"slot","fld":"device","val":"ROM","idx":0}
 {"emu":"msx","cat":"io","sec":"slot","fld":"primary","val":"0","idx":0}
 {"emu":"msx","cat":"io","sec":"slot","fld":"secondary","val":"0","idx":0}
+```
+
+### 6.4 어나운시에이터 (`sec: "ann"`) - AppleWin
+```json
+{"emu":"apple","cat":"io","sec":"ann","fld":"state","val":"0","idx":"0"}
+{"emu":"apple","cat":"io","sec":"ann","fld":"state","val":"1","idx":"1"}
+{"emu":"apple","cat":"io","sec":"ann","fld":"state","val":"0","idx":"2"}
+{"emu":"apple","cat":"io","sec":"ann","fld":"state","val":"0","idx":"3"}
 ```
 
 ---
@@ -337,6 +377,21 @@
 {"emu":"apple","cat":"dbg","sec":"trace","fld":"exec","val":"LDA #$20","addr":"C600"}
 {"emu":"apple","cat":"dbg","sec":"trace","fld":"opcode","val":"A9","addr":"C600"}
 {"emu":"msx","cat":"dbg","sec":"trace","fld":"exec","val":"LD A,#FF","addr":"0000"}
+```
+
+### 8.4 역어셈블 (`sec: "disasm"`) - AppleWin
+```json
+{"emu":"apple","cat":"dbg","sec":"disasm","fld":"line","val":"LDA #20","addr":"C600","idx":"0"}
+{"emu":"apple","cat":"dbg","sec":"disasm","fld":"line","val":"STA 00","addr":"C602","idx":"1"}
+{"emu":"apple","cat":"dbg","sec":"disasm","fld":"line","val":"JSR C700","addr":"C604","idx":"2"}
+```
+
+### 8.5 CPU 스택 (`sec: "stack"` in `cpu` 카테고리) - AppleWin
+```json
+{"emu":"apple","cat":"cpu","sec":"stack","fld":"sp","val":"F8"}
+{"emu":"apple","cat":"cpu","sec":"stack","fld":"depth","val":"7"}
+{"emu":"apple","cat":"cpu","sec":"stack","fld":"val","val":"C6","addr":"01F9","idx":"0"}
+{"emu":"apple","cat":"cpu","sec":"stack","fld":"val","val":"00","addr":"01FA","idx":"1"}
 ```
 
 ---
@@ -528,6 +583,7 @@
 | 버전 | 날짜 | 변경 내용 |
 |------|------|----------|
 | V01 | 2024-12-29 | 초안 작성 - 모든 라인에 `emu` 필드 필수 포함 |
+| V01.1 | 2026-01-04 | 65501-65504 호환성 확장: Zero Page/Stack 덤프, 텍스트 화면, 어나운시에이터, 역어셈블, CPU 스택 정보 추가 |
 
 ---
 

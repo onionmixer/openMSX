@@ -8,7 +8,7 @@ namespace openmsx {
 GlobalSettings::GlobalSettings(GlobalCommandController& commandController_)
 	: commandController(commandController_)
 	, pauseSetting(commandController, "pause",
-	       "pauses the emulation", false, Setting::Save::NO)
+	       "pauses the emulation", true, Setting::Save::NO)  // Start paused by default for debugging
 	, powerSetting(commandController, "power",
 	        "turn power on/off", false, Setting::Save::NO)
 	, autoSaveSetting(commandController, "save_settings_on_exit",
@@ -30,6 +30,15 @@ GlobalSettings::GlobalSettings(GlobalCommandController& commandController_)
 			{"blip", ResampledSoundDevice::ResampleType::BLIP}})
 	, speedManager(commandController)
 	, throttleManager(commandController)
+	// Debug streaming settings (default: ON, can be turned OFF via TCL)
+	, debugStreamCpuSetting(commandController, "debug_stream_cpu",
+		"Stream CPU register/flag updates to port 65505", true, Setting::Save::YES)
+	, debugStreamMemSetting(commandController, "debug_stream_mem",
+		"Stream memory read/write events to port 65505", true, Setting::Save::YES)
+	, debugStreamIOSetting(commandController, "debug_stream_io",
+		"Stream I/O port access events to port 65505", true, Setting::Save::YES)
+	, debugStreamSlotSetting(commandController, "debug_stream_slot",
+		"Stream slot/bank change events to port 65505", true, Setting::Save::YES)
 {
 	getPowerSetting().attach(*this);
 }

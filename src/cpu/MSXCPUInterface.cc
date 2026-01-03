@@ -3,6 +3,8 @@
 #include "BooleanSetting.hh"
 #include "CartridgeSlotManager.hh"
 #include "CommandException.hh"
+#include "DebugHttpServer.hh"
+#include "DebugStreamFormatter.hh"
 #include "DeviceFactory.hh"
 #include "DummyDevice.hh"
 #include "Event.hh"
@@ -206,11 +208,26 @@ uint8_t MSXCPUInterface::readMemSlow(uint16_t address, EmuTime time)
 			executeMemWatch(WatchPoint::Type::READ_MEM, address);
 		}
 	}
+	uint8_t value;
 	if ((address == 0xFFFF) && isExpanded(primarySlotState[3])) [[unlikely]] {
-		return 0xFF ^ subSlotRegister[primarySlotState[3]];
+		value = 0xFF ^ subSlotRegister[primarySlotState[3]];
 	} else {
-		return visibleDevices[address >> 14]->readMem(address, time);
+		value = visibleDevices[address >> 14]->readMem(address, time);
 	}
+
+	// Debug stream broadcast for memory read
+	auto& globalSettings = motherBoard.getReactor().getGlobalSettings();
+	if (globalSettings.getDebugStreamMemSetting().getBoolean()) [[unlikely]] {
+		if (auto* server = motherBoard.getReactor().getDebugHttpServer()) {
+			if (server->isStreamingActive()) {
+				if (auto* formatter = server->getStreamFormatter()) {
+					server->broadcastStreamData(formatter->getMemoryRead(address, value));
+				}
+			}
+		}
+	}
+
+	return value;
 }
 
 void MSXCPUInterface::writeMemSlow(uint16_t address, uint8_t value, EmuTime time)
@@ -244,6 +261,46 @@ void MSXCPUInterface::writeMemSlow(uint16_t address, uint8_t value, EmuTime time
 		if (writeWatchSet[address >> CacheLine::BITS]
 		                 [address &  CacheLine::LOW]) {
 			executeMemWatch(WatchPoint::Type::WRITE_MEM, address, value);
+		}
+	}
+
+	// Debug stream broadcast for memory write
+	auto& globalSettings = motherBoard.getReactor().getGlobalSettings();
+	if (globalSettings.getDebugStreamMemSetting().getBoolean()) [[unlikely]] {
+		if (auto* server = motherBoard.getReactor().getDebugHttpServer()) {
+			if (server->isStreamingActive()) {
+				if (auto* formatter = server->getStreamFormatter()) {
+					server->broadcastStreamData(formatter->getMemoryWrite(address, value));
+				}
+			}
+		}
+	}
+}
+
+void MSXCPUInterface::broadcastIORead(uint8_t port, uint8_t value)
+{
+	auto& globalSettings = motherBoard.getReactor().getGlobalSettings();
+	if (globalSettings.getDebugStreamIOSetting().getBoolean()) [[unlikely]] {
+		if (auto* server = motherBoard.getReactor().getDebugHttpServer()) {
+			if (server->isStreamingActive()) {
+				if (auto* formatter = server->getStreamFormatter()) {
+					server->broadcastStreamData(formatter->getIOPortRead(port, value));
+				}
+			}
+		}
+	}
+}
+
+void MSXCPUInterface::broadcastIOWrite(uint8_t port, uint8_t value)
+{
+	auto& globalSettings = motherBoard.getReactor().getGlobalSettings();
+	if (globalSettings.getDebugStreamIOSetting().getBoolean()) [[unlikely]] {
+		if (auto* server = motherBoard.getReactor().getDebugHttpServer()) {
+			if (server->isStreamingActive()) {
+				if (auto* formatter = server->getStreamFormatter()) {
+					server->broadcastStreamData(formatter->getIOPortWrite(port, value));
+				}
+			}
 		}
 	}
 }
@@ -721,23 +778,42 @@ void MSXCPUInterface::setPrimarySlots(uint8_t value)
 	// difference.  Changing the slots several hundreds of times per
 	// (EmuTime) is not unusual. So this routine ended up quite high
 	// (top-10) in some profile results.
+
+	// Helper lambda for slot change streaming
+	auto broadcastSlotChange = [this](int page, int ps, int ss, bool exp) {
+		auto& globalSettings = motherBoard.getReactor().getGlobalSettings();
+		if (globalSettings.getDebugStreamSlotSetting().getBoolean()) {
+			if (auto* server = motherBoard.getReactor().getDebugHttpServer()) {
+				if (server->isStreamingActive()) {
+					if (auto* formatter = server->getStreamFormatter()) {
+						server->broadcastStreamData(
+							formatter->getSlotChange(page, ps, ss, exp));
+					}
+				}
+			}
+		}
+	};
+
 	if (uint8_t ps0 = (value >> 0) & 3; primarySlotState[0] != ps0) [[unlikely]] {
 		primarySlotState[0] = ps0;
 		uint8_t ss0 = (subSlotRegister[ps0] >> 0) & 3;
 		secondarySlotState[0] = ss0;
 		updateVisible(0, ps0, ss0);
+		broadcastSlotChange(0, ps0, ss0, isExpanded(ps0));
 	}
 	if (uint8_t ps1 = (value >> 2) & 3; primarySlotState[1] != ps1) [[unlikely]] {
 		primarySlotState[1] = ps1;
 		uint8_t ss1 = (subSlotRegister[ps1] >> 2) & 3;
 		secondarySlotState[1] = ss1;
 		updateVisible(1, ps1, ss1);
+		broadcastSlotChange(1, ps1, ss1, isExpanded(ps1));
 	}
 	if (uint8_t ps2 = (value >> 4) & 3; primarySlotState[2] != ps2) [[unlikely]] {
 		primarySlotState[2] = ps2;
 		uint8_t ss2 = (subSlotRegister[ps2] >> 4) & 3;
 		secondarySlotState[2] = ss2;
 		updateVisible(2, ps2, ss2);
+		broadcastSlotChange(2, ps2, ss2, isExpanded(ps2));
 	}
 	if (uint8_t ps3 = (value >> 6) & 3; primarySlotState[3] != ps3) [[unlikely]] {
 		bool oldExpanded = isExpanded(primarySlotState[3]);
@@ -746,6 +822,7 @@ void MSXCPUInterface::setPrimarySlots(uint8_t value)
 		uint8_t ss3 = (subSlotRegister[ps3] >> 6) & 3;
 		secondarySlotState[3] = ss3;
 		updateVisible(3, ps3, ss3);
+		broadcastSlotChange(3, ps3, ss3, newExpanded);
 		if (oldExpanded != newExpanded) [[unlikely]] {
 			changeExpanded(newExpanded);
 		}
@@ -757,9 +834,23 @@ void MSXCPUInterface::setSubSlot(uint8_t primSlot, uint8_t value)
 	subSlotRegister[primSlot] = value;
 	for (uint8_t page = 0; page < 4; ++page, value >>= 2) {
 		if (primSlot == primarySlotState[page]) {
-			secondarySlotState[page] = value & 3;
+			uint8_t ss = value & 3;
+			secondarySlotState[page] = ss;
 			// Change the visible devices
 			updateVisible(page);
+
+			// Debug stream broadcast for subslot change
+			auto& globalSettings = motherBoard.getReactor().getGlobalSettings();
+			if (globalSettings.getDebugStreamSlotSetting().getBoolean()) [[unlikely]] {
+				if (auto* server = motherBoard.getReactor().getDebugHttpServer()) {
+					if (server->isStreamingActive()) {
+						if (auto* formatter = server->getStreamFormatter()) {
+							server->broadcastStreamData(
+								formatter->getSlotChange(page, primSlot, ss, true));
+						}
+					}
+				}
+			}
 		}
 	}
 }
@@ -906,6 +997,17 @@ bool MSXCPUInterface::checkBreakPoints(unsigned pc)
 	auto scopedBlock = motherBoard.getStateChangeDistributor().tempBlockNewEventsDuringReplay();
 	for (auto& p : bpCopy) {
 		bool remove = p.checkAndExecute(globalCliComm, interp);
+
+		// Stream breakpoint hit to port 65505
+		if (auto* server = motherBoard.getReactor().getDebugHttpServer()) {
+			if (server->isStreamingActive()) {
+				if (auto* formatter = server->getStreamFormatter()) {
+					server->broadcastStreamData(
+						formatter->getBreakpointHit(p.getId(), static_cast<uint16_t>(pc)));
+				}
+			}
+		}
+
 		if (remove) {
 			removeBreakPoint(p.getId());
 		}
@@ -1066,6 +1168,18 @@ void MSXCPUInterface::executeMemWatch(WatchPoint::Type type,
 		    (w->getEndAddress()   >= address) &&
 		    (w->getType()         == type)) {
 			bool remove = w->checkAndExecute(globalCliComm, interp);
+
+			// Stream watchpoint hit to port 65505
+			if (auto* server = motherBoard.getReactor().getDebugHttpServer()) {
+				if (server->isStreamingActive()) {
+					if (auto* formatter = server->getStreamFormatter()) {
+						const char* typeStr = (type == WatchPoint::Type::READ_MEM) ? "read" : "write";
+						server->broadcastStreamData(
+							formatter->getWatchpointHit(w->getId(), static_cast<uint16_t>(address), typeStr));
+					}
+				}
+			}
+
 			if (remove) {
 				removeWatchPoint(w);
 			}

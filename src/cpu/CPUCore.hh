@@ -177,6 +177,7 @@ private:
 	inline void cpuTracePre();
 	inline void cpuTracePost();
 	void cpuTracePost_slow();
+	void cpuStreamPost();
 
 	inline uint8_t READ_PORT(uint16_t port, unsigned cc);
 	inline void WRITE_PORT(uint16_t port, uint8_t value, unsigned cc);

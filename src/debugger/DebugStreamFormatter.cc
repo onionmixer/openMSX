@@ -7,6 +7,7 @@
 #include "MSXCPUInterface.hh"
 #include "MSXDevice.hh"
 #include "HardwareConfig.hh"
+#include "Version.hh"
 
 #include <chrono>
 #include <iomanip>
@@ -101,8 +102,10 @@ std::string DebugStreamFormatter::formatLine(
 std::string DebugStreamFormatter::getHelloMessage()
 {
 	std::lock_guard<std::mutex> lock(accessMutex);
-	return formatLine("sys", "conn", "hello", VERSION,
-		{{"ts", std::to_string(getTimestamp())}});
+	// Spec: val should be "openMSX <version>", ver is protocol version
+	// Version::full() already returns "openMSX <version>"
+	return formatLine("sys", "conn", "hello", Version::full(),
+		{{"ver", PROTOCOL_VERSION}, {"ts", std::to_string(getTimestamp())}});
 }
 
 std::string DebugStreamFormatter::getGoodbyeMessage()
@@ -343,14 +346,73 @@ std::string DebugStreamFormatter::getCPUState()
 
 std::string DebugStreamFormatter::getMemoryRead(uint16_t addr, uint8_t value)
 {
-	return formatLine("mem", "access", "read", toHex8(value),
+	// OUTPUT_SPEC_V01: mem/read/byte
+	return formatLine("mem", "read", "byte", toHex8(value),
 		{{"addr", toHex16(addr)}, {"ts", std::to_string(getTimestamp())}});
 }
 
 std::string DebugStreamFormatter::getMemoryWrite(uint16_t addr, uint8_t value)
 {
-	return formatLine("mem", "access", "write", toHex8(value),
+	// OUTPUT_SPEC_V01: mem/write/byte
+	return formatLine("mem", "write", "byte", toHex8(value),
 		{{"addr", toHex16(addr)}, {"ts", std::to_string(getTimestamp())}});
+}
+
+std::string DebugStreamFormatter::getSlotChange(int page, int primary, int secondary, bool expanded)
+{
+	// OUTPUT_SPEC_V01: mem/bank/page_pri, mem/bank/page_sec
+	std::string slotStr = std::to_string(primary);
+	if (expanded) {
+		slotStr += "-" + std::to_string(secondary);
+	}
+	return formatLine("mem", "bank", "page_pri", std::to_string(primary),
+		{{"idx", std::to_string(page)},
+		 {"sec", std::to_string(secondary)},
+		 {"expanded", expanded ? "1" : "0"},
+		 {"ts", std::to_string(getTimestamp())}});
+}
+
+//-----------------------------------------------------------------------------
+// I/O port information (cat: io)
+//-----------------------------------------------------------------------------
+
+std::string DebugStreamFormatter::getIOPortRead(uint8_t port, uint8_t value)
+{
+	// OUTPUT_SPEC_V01: io/port/read
+	return formatLine("io", "port", "read", toHex8(value),
+		{{"addr", toHex8(port)}, {"ts", std::to_string(getTimestamp())}});
+}
+
+std::string DebugStreamFormatter::getIOPortWrite(uint8_t port, uint8_t value)
+{
+	// OUTPUT_SPEC_V01: io/port/write
+	return formatLine("io", "port", "write", toHex8(value),
+		{{"addr", toHex8(port)}, {"ts", std::to_string(getTimestamp())}});
+}
+
+//-----------------------------------------------------------------------------
+// CPU register updates (for real-time streaming)
+//-----------------------------------------------------------------------------
+
+std::string DebugStreamFormatter::getRegisterUpdate(const char* reg, uint16_t value)
+{
+	// OUTPUT_SPEC_V01: cpu/reg/<fld>
+	return formatLine("cpu", "reg", reg, toHex16(value),
+		{{"ts", std::to_string(getTimestamp())}});
+}
+
+std::string DebugStreamFormatter::getRegister8Update(const char* reg, uint8_t value)
+{
+	// OUTPUT_SPEC_V01: cpu/reg/<fld> for 8-bit registers (i, r)
+	return formatLine("cpu", "reg", reg, toHex8(value),
+		{{"ts", std::to_string(getTimestamp())}});
+}
+
+std::string DebugStreamFormatter::getFlagUpdate(const char* flag, bool value)
+{
+	// OUTPUT_SPEC_V01: cpu/flag/<fld>
+	return formatLine("cpu", "flag", flag, value ? "1" : "0",
+		{{"ts", std::to_string(getTimestamp())}});
 }
 
 std::string DebugStreamFormatter::getMemoryBank()
@@ -424,6 +486,12 @@ std::string DebugStreamFormatter::getBreakpointHit(int index, uint16_t addr)
 {
 	return formatLine("dbg", "bp", "hit", std::to_string(index),
 		{{"addr", toHex16(addr)}, {"ts", std::to_string(getTimestamp())}});
+}
+
+std::string DebugStreamFormatter::getWatchpointHit(int index, uint16_t addr, const char* type)
+{
+	return formatLine("dbg", "wp", "hit", std::to_string(index),
+		{{"addr", toHex16(addr)}, {"type", type}, {"ts", std::to_string(getTimestamp())}});
 }
 
 std::string DebugStreamFormatter::getTraceExec(uint16_t addr, const std::string& disasm)

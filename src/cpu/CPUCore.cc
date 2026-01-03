@@ -161,8 +161,12 @@
 #include "CPUCore.hh"
 
 #include "Dasm.hh"
+#include "DebugHttpServer.hh"
+#include "DebugStreamFormatter.hh"
+#include "GlobalSettings.hh"
 #include "MSXCPUInterface.hh"
 #include "R800.hh"
+#include "Reactor.hh"
 #include "Z80.hh"
 
 #include "MSXCliComm.hh"
@@ -2440,6 +2444,8 @@ template<typename T> inline void CPUCore<T>::cpuTracePost()
 	if (tracingEnabled) [[unlikely]] {
 		cpuTracePost_slow();
 	}
+	// Stream CPU state to debug port 65505 if enabled
+	cpuStreamPost();
 }
 template<typename T> void CPUCore<T>::cpuTracePost_slow()
 {
@@ -2458,6 +2464,37 @@ template<typename T> void CPUCore<T>::cpuTracePost_slow()
 	                    " SP=", hex_string<4>(getSP()),
 	                    '\n')
 	          << std::flush;
+}
+
+template<typename T> void CPUCore<T>::cpuStreamPost()
+{
+	auto& globalSettings = motherboard.getReactor().getGlobalSettings();
+	if (!globalSettings.getDebugStreamCpuSetting().getBoolean()) {
+		return;
+	}
+
+	auto* server = motherboard.getReactor().getDebugHttpServer();
+	if (!server || !server->isStreamingActive()) {
+		return;
+	}
+
+	auto* formatter = server->getStreamFormatter();
+	if (!formatter) {
+		return;
+	}
+
+	// Get disassembly for trace output
+	std::array<uint8_t, 4> opBuf;
+	std::string dasmOutput;
+	dasm(*interface, start_pc, opBuf, dasmOutput, T::getTimeFast());
+
+	// Broadcast trace execution with PC and disassembly
+	std::string traceData = formatter->getTraceExec(start_pc, dasmOutput);
+	server->broadcastStreamData(traceData);
+
+	// Broadcast CPU register state (use existing parameterless method)
+	std::string regData = formatter->getCPURegisters();
+	server->broadcastStreamData(regData);
 }
 
 template<typename T> ExecIRQ CPUCore<T>::getExecIRQ() const

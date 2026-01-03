@@ -14,7 +14,7 @@ Fork Additions
 
 This fork adds the following features:
 
-* Debug HTTP Server
+* Debug HTTP Server (Pull-based)
   - Real-time debugging information via HTTP endpoints
   - Machine info, CPU registers, I/O status, memory dumps
   - Server-Sent Events (SSE) streaming support
@@ -30,6 +30,35 @@ This fork adds the following features:
        - http://127.0.0.1:65502/  (I/O status)
        - http://127.0.0.1:65503/  (CPU registers)
        - http://127.0.0.1:65504/  (Memory viewer)
+
+* Debug Stream Server (Push-based)
+  - Real-time JSON Lines debug streaming via Telnet protocol
+  - Push-based streaming for continuous state updates
+  - OUTPUT_SPEC_V01 format with "emu":"msx" identifier
+  - Default port: 65505
+
+  How to enable:
+    1. Launch openMSX
+    2. Open the TCL console (press F10 or use the menu)
+    3. Enter the following command:
+       set debug_stream_enable on
+    4. Connect via telnet or netcat:
+       telnet 127.0.0.1 65505
+       # or
+       nc 127.0.0.1 65505
+
+  Output format (JSON Lines):
+    {"emu":"msx","cat":"cpu","sec":"reg","fld":"af","val":"F3A0","ts":...}
+    {"emu":"msx","cat":"cpu","sec":"reg","fld":"pc","val":"0000","ts":...}
+
+  Categories:
+    - sys  : System messages (connection hello/goodbye)
+    - mach : Machine info (id, name, type, status)
+    - cpu  : CPU state (registers, flags, interrupts)
+    - mem  : Memory access (read/write events, slot mapping)
+    - dbg  : Debug events (breakpoint hits, trace)
+
+  See src/debugger/README.md for detailed API documentation.
 
   See HOWTO_COMPILE.md for detailed usage instructions.
 

@@ -56,6 +56,20 @@ public:
 		return throttleManager;
 	}
 
+	// Debug streaming settings (default: ON, can be turned OFF via TCL)
+	[[nodiscard]] BooleanSetting& getDebugStreamCpuSetting() {
+		return debugStreamCpuSetting;
+	}
+	[[nodiscard]] BooleanSetting& getDebugStreamMemSetting() {
+		return debugStreamMemSetting;
+	}
+	[[nodiscard]] BooleanSetting& getDebugStreamIOSetting() {
+		return debugStreamIOSetting;
+	}
+	[[nodiscard]] BooleanSetting& getDebugStreamSlotSetting() {
+		return debugStreamSlotSetting;
+	}
+
 private:
 	// Observer<Setting>
 	void update(const Setting& setting) noexcept override;
@@ -72,6 +86,12 @@ private:
 	EnumSetting<ResampledSoundDevice::ResampleType> resampleSetting;
 	SpeedManager speedManager;
 	ThrottleManager throttleManager;
+
+	// Debug streaming settings (default: ON)
+	BooleanSetting debugStreamCpuSetting;
+	BooleanSetting debugStreamMemSetting;
+	BooleanSetting debugStreamIOSetting;
+	BooleanSetting debugStreamSlotSetting;
 };
 
 } // namespace openmsx

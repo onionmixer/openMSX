@@ -56,6 +56,20 @@ public:
 	[[nodiscard]] std::string getMemoryRead(uint16_t addr, uint8_t value);
 	[[nodiscard]] std::string getMemoryWrite(uint16_t addr, uint8_t value);
 	[[nodiscard]] std::string getMemoryBank();
+	[[nodiscard]] std::string getSlotChange(int page, int primary, int secondary, bool expanded);
+
+	//-------------------------------------------------------------------------
+	// I/O port information (cat: io)
+	//-------------------------------------------------------------------------
+	[[nodiscard]] std::string getIOPortRead(uint8_t port, uint8_t value);
+	[[nodiscard]] std::string getIOPortWrite(uint8_t port, uint8_t value);
+
+	//-------------------------------------------------------------------------
+	// CPU register updates (for real-time streaming)
+	//-------------------------------------------------------------------------
+	[[nodiscard]] std::string getRegisterUpdate(const char* reg, uint16_t value);
+	[[nodiscard]] std::string getRegister8Update(const char* reg, uint8_t value);
+	[[nodiscard]] std::string getFlagUpdate(const char* flag, bool value);
 
 	//-------------------------------------------------------------------------
 	// Machine information (cat: mach)
@@ -67,6 +81,7 @@ public:
 	// Debug information (cat: dbg)
 	//-------------------------------------------------------------------------
 	[[nodiscard]] std::string getBreakpointHit(int index, uint16_t addr);
+	[[nodiscard]] std::string getWatchpointHit(int index, uint16_t addr, const char* type);
 	[[nodiscard]] std::string getTraceExec(uint16_t addr, const std::string& disasm);
 
 private:
@@ -93,7 +108,7 @@ private:
 	Reactor& reactor;
 	mutable std::mutex accessMutex;
 
-	static constexpr const char* VERSION = "1.0";
+	static constexpr const char* PROTOCOL_VERSION = "1.0";
 };
 
 } // namespace openmsx

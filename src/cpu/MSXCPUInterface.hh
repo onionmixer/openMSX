@@ -164,7 +164,9 @@ public:
 	 * @see MSXDevice::readIO()
 	 */
 	uint8_t readIO(uint16_t port, EmuTime time) {
-		return IO_In[port & 0xFF]->readIO(port, time);
+		uint8_t value = IO_In[port & 0xFF]->readIO(port, time);
+		broadcastIORead(port & 0xFF, value);
+		return value;
 	}
 
 	/**
@@ -173,7 +175,12 @@ public:
 	 */
 	void writeIO(uint16_t port, uint8_t value, EmuTime time) {
 		IO_Out[port & 0xFF]->writeIO(port, value, time);
+		broadcastIOWrite(port & 0xFF, value);
 	}
+
+	// Debug streaming helper functions (implemented in .cc file)
+	void broadcastIORead(uint8_t port, uint8_t value);
+	void broadcastIOWrite(uint8_t port, uint8_t value);
 
 	/**
 	 * Test that the memory in the interval [start, start +

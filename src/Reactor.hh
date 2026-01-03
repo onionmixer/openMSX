@@ -112,6 +112,7 @@ public:
 	[[nodiscard]] const HotKey& getHotKey() const;
 	[[nodiscard]] SymbolManager& getSymbolManager() const { return *symbolManager; }
 	[[nodiscard]] AviRecorder& getRecorder() const { return *aviRecordCommand; }
+	[[nodiscard]] DebugHttpServer* getDebugHttpServer() { return debugHttpServer.get(); }
 
 	[[nodiscard]] RomDatabase& getSoftwareDatabase();
 
