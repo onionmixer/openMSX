@@ -89,6 +89,28 @@ public:
 	[[nodiscard]] std::string getWatchpointHit(int index, uint16_t addr, const char* type);
 	[[nodiscard]] std::string getTraceExec(uint16_t addr, const std::string& disasm);
 
+	//-------------------------------------------------------------------------
+	// Text screen (cat: mem, sec: text) - TEXT1/TEXT2 modes only
+	//-------------------------------------------------------------------------
+	/**
+	 * Get all text screen rows (24 rows for TEXT1/TEXT2 modes).
+	 * Returns empty vector if not in text mode.
+	 * Each string is a JSON line: {"emu":"msx","cat":"mem","sec":"text","fld":"row","val":"...","idx":"N","addr":"XXXX"}
+	 */
+	[[nodiscard]] std::vector<std::string> getTextScreen();
+
+	/**
+	 * Get a single text screen row.
+	 * Returns empty string if not in text mode or row out of range.
+	 */
+	[[nodiscard]] std::string getTextScreenRow(int row);
+
+	/**
+	 * Get current screen mode info.
+	 * Returns mode name and whether text extraction is supported.
+	 */
+	[[nodiscard]] std::string getScreenModeInfo();
+
 private:
 	// Format a single JSON line
 	[[nodiscard]] std::string formatLine(
