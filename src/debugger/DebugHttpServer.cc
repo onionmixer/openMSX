@@ -3,6 +3,7 @@
 #include "DebugHttpServerPort.hh"
 #include "DebugInfoProvider.hh"
 #include "DebugStreamFormatter.hh"
+#include "DebugStreamWorker.hh"
 #include "DebugTelnetServer.hh"
 #include "MSXMotherBoard.hh"
 #include "MSXCPU.hh"
@@ -76,6 +77,12 @@ DebugHttpServer::DebugHttpServer(Reactor& reactor_)
 
 void DebugHttpServer::startStreamServer()
 {
+	// Stop existing worker first (before server)
+	if (streamWorker) {
+		streamWorker->stop();
+		streamWorker.reset();
+	}
+
 	if (streamServer) {
 		streamServer->stop();
 		streamServer.reset();
@@ -94,8 +101,15 @@ void DebugHttpServer::startStreamServer()
 		streamServer = std::make_unique<DebugTelnetServer>(
 			streamPortSetting.getInt(), *streamFormatter, onClientConnect);
 		streamServer->start();
+
+		// Create and start the worker thread for CPU trace processing
+		streamWorker = std::make_unique<DebugStreamWorker>(
+			*this, *streamFormatter);
+		streamWorker->start();
+
 		streamServerRunning = true;
 	} catch (...) {
+		streamWorker.reset();
 		streamServer.reset();
 		streamServerRunning = false;
 	}
@@ -116,6 +130,12 @@ DebugHttpServer::~DebugHttpServer()
 
 	// Stop HTTP servers
 	stopServers();
+
+	// Stop stream worker first (before server)
+	if (streamWorker) {
+		streamWorker->stop();
+		streamWorker.reset();
+	}
 
 	// Stop stream server
 	if (streamServer) {
@@ -186,7 +206,11 @@ void DebugHttpServer::update(const Setting& setting) noexcept
 
 	if (&setting == &streamEnableSetting ||
 	    &setting == &streamPortSetting) {
-		// Update stream server
+		// Update stream server and worker
+		if (streamWorker) {
+			streamWorker->stop();
+			streamWorker.reset();
+		}
 		if (streamServer) {
 			streamServer->stop();
 			streamServer.reset();

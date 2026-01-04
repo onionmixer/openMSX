@@ -55,8 +55,8 @@ public:
 	// Broadcast data to all connected clients (thread-safe)
 	void broadcast(const std::string& data);
 
-	// Get number of connected clients
-	[[nodiscard]] size_t getClientCount() const;
+	// Get number of connected clients (O(1) - uses cached atomic count)
+	[[nodiscard]] size_t getClientCount() const { return activeClientCount.load(); }
 
 	// Called periodically to clean up closed connections
 	void cleanupConnections();
@@ -80,6 +80,7 @@ private:
 	std::vector<std::unique_ptr<DebugTelnetConnection>> connections;
 
 	std::atomic<bool> running{false};
+	std::atomic<size_t> activeClientCount{0};  // Cached client count for O(1) access
 	std::string lastError;
 };
 

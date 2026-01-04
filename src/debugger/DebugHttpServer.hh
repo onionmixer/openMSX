@@ -15,6 +15,7 @@ class Reactor;
 class DebugHttpServerPort;
 class DebugInfoProvider;
 class DebugStreamFormatter;
+class DebugStreamWorker;
 class DebugTelnetServer;
 
 /**
@@ -42,6 +43,7 @@ public:
 	[[nodiscard]] DebugInfoProvider& getInfoProvider() { return *infoProvider; }
 	[[nodiscard]] DebugStreamFormatter* getStreamFormatter() { return streamFormatter.get(); }
 	[[nodiscard]] DebugTelnetServer* getStreamServer() { return streamServer.get(); }
+	[[nodiscard]] DebugStreamWorker* getStreamWorker() { return streamWorker.get(); }
 
 	// Broadcast data to all connected stream clients
 	void broadcastStreamData(const std::string& data);
@@ -79,6 +81,9 @@ private:
 
 	// Stream server (Telnet, JSON Lines output)
 	std::unique_ptr<DebugTelnetServer> streamServer;
+
+	// Stream worker thread for CPU trace processing
+	std::unique_ptr<DebugStreamWorker> streamWorker;
 
 	bool serversRunning = false;
 	bool streamServerRunning = false;

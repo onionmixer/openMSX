@@ -107,6 +107,9 @@ void DebugTelnetServer::stop()
 		}
 		connections.clear();
 	}
+
+	// Reset cached client count
+	activeClientCount.store(0);
 }
 
 void DebugTelnetServer::mainLoop()
@@ -170,6 +173,9 @@ void DebugTelnetServer::acceptConnection(SOCKET clientSocket)
 		connections.push_back(std::move(connection));
 	}
 
+	// Update cached client count
+	++activeClientCount;
+
 	// Notify that a client connected (triggers CPU loop exit for debug streaming)
 	if (onClientConnect) {
 		onClientConnect();
@@ -204,13 +210,6 @@ void DebugTelnetServer::broadcast(const std::string& data)
 	}
 }
 
-size_t DebugTelnetServer::getClientCount() const
-{
-	std::lock_guard<std::mutex> lock(connectionsMutex);
-	return std::count_if(connections.begin(), connections.end(),
-		[](const auto& conn) { return conn && !conn->isClosed(); });
-}
-
 void DebugTelnetServer::cleanupConnections()
 {
 	std::lock_guard<std::mutex> lock(connectionsMutex);
@@ -226,6 +225,11 @@ void DebugTelnetServer::cleanupConnections()
 	std::erase_if(connections, [](const auto& conn) {
 		return !conn || conn->isClosed();
 	});
+
+	// Update cached client count to actual active count
+	size_t count = std::count_if(connections.begin(), connections.end(),
+		[](const auto& conn) { return conn && !conn->isClosed(); });
+	activeClientCount.store(count);
 }
 
 } // namespace openmsx

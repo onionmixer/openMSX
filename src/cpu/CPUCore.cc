@@ -160,9 +160,11 @@
 
 #include "CPUCore.hh"
 
+#include "CpuStreamEntry.hh"
 #include "Dasm.hh"
 #include "DebugHttpServer.hh"
 #include "DebugStreamFormatter.hh"
+#include "DebugStreamWorker.hh"
 #include "GlobalSettings.hh"
 #include "MSXCPUInterface.hh"
 #include "R800.hh"
@@ -2468,36 +2470,44 @@ template<typename T> void CPUCore<T>::cpuTracePost_slow()
 
 template<typename T> void CPUCore<T>::cpuStreamPost()
 {
-	auto& globalSettings = motherboard.getReactor().getGlobalSettings();
-	if (!globalSettings.getDebugStreamCpuSetting().getBoolean()) {
-		return;
-	}
-
+	// Fast path: check if worker is available and running
 	auto* server = motherboard.getReactor().getDebugHttpServer();
-	if (!server || !server->isStreamingActive()) {
+	if (!server) [[likely]] {
 		return;
 	}
 
-	auto* formatter = server->getStreamFormatter();
-	if (!formatter) {
+	auto* worker = server->getStreamWorker();
+	if (!worker || !worker->isRunning()) [[likely]] {
 		return;
 	}
 
-	// Get disassembly for trace output
-	std::array<uint8_t, 4> opBuf;
-	std::string dasmOutput;
-	dasm(*interface, start_pc, opBuf, dasmOutput, T::getTimeFast());
+	// Additional check: skip if no clients connected (cached check)
+	if (!worker->hasClients()) [[likely]] {
+		return;
+	}
 
-	// Broadcast trace execution with PC and disassembly
-	std::string traceData = formatter->getTraceExec(start_pc, dasmOutput);
-	server->broadcastStreamData(traceData);
+	// Create entry with current CPU state
+	CpuStreamEntry entry;
+	entry.pc = start_pc;
+	entry.af = getAF();
+	entry.bc = getBC();
+	entry.de = getDE();
+	entry.hl = getHL();
+	entry.ix = getIX();
+	entry.iy = getIY();
+	entry.sp = getSP();
 
-	// Broadcast CPU register state using direct access to current CPU registers
-	// CPUCore<T> inherits from CPURegs, so we can access registers directly via 'this'
-	std::string regData = formatter->getCPURegistersSnapshot(
-		getAF(), getBC(), getDE(), getHL(),
-		getIX(), getIY(), getSP(), getPC());
-	server->broadcastStreamData(regData);
+	// Pre-fetch instruction bytes (CRITICAL for thread-safety)
+	// The worker thread cannot safely access MSX memory, so we fetch here
+	EmuTime time = T::getTimeFast();
+	for (uint8_t i = 0; i < 4; ++i) {
+		entry.opcode[i] = interface->peekMem(narrow_cast<uint16_t>(start_pc + i), time);
+	}
+	entry.opcodeLen = 4;  // Worker will determine actual length
+	entry.valid = true;
+
+	// Non-blocking enqueue - if queue is full, entry is dropped
+	worker->enqueue(entry);
 }
 
 template<typename T> ExecIRQ CPUCore<T>::getExecIRQ() const
@@ -2600,16 +2610,8 @@ template<typename T> void CPUCore<T>::execute2(bool fastForward)
 	// deciding between executeFast() and executeSlow() (because a
 	// SyncPoint could set an IRQ and then we must choose executeSlow())
 
-	// Check if debug streaming is active (requires slow path for cpuStreamPost)
-	bool debugStreamActive = false;
-	if (!fastForward) {
-		if (auto* server = motherboard.getReactor().getDebugHttpServer()) {
-			debugStreamActive = server->isStreamingActive();
-		}
-	}
-
 	if (fastForward ||
-	    (!interface->anyBreakPoints() && !tracingEnabled && !debugStreamActive)) {
+	    (!interface->anyBreakPoints() && !tracingEnabled)) {
 		// fast path, no breakpoints, no tracing, no debug streaming
 		do {
 			if (slowInstructions) {
