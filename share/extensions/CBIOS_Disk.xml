@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<!DOCTYPE msxconfig SYSTEM "msxconfig2.dtd">
+<msxconfig>
+  <info>
+    <name>C-BIOS Disk Interface</name>
+    <manufacturer>C-BIOS</manufacturer>
+    <code></code>
+    <release_year>2005</release_year>
+    <description>C-BIOS compatible disk interface with 2 drives.</description>
+    <type>disk drive</type>
+  </info>
+
+  <devices>
+    <primary slot="any">
+      <secondary slot="any">
+        <WD2793 id="C-BIOS Disk Interface">
+          <connectionstyle>Philips</connectionstyle>
+          <mem base="0x4000" size="0x4000"/>
+          <rom>
+            <sha1>5b496df8bd55c563aed1b4ae163271afa76db367</sha1>
+            <filename>cbios_disk.rom</filename>
+          </rom>
+          <drives>2</drives>
+        </WD2793>
+      </secondary>
+    </primary>
+  </devices>
+</msxconfig>
