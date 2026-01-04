@@ -53,6 +53,7 @@ private:
 	void startServers();
 	void stopServers();
 	void updateServers();
+	void startStreamServer();
 
 	// Observer<Setting>
 	void update(const Setting& setting) noexcept override;

@@ -2492,8 +2492,11 @@ template<typename T> void CPUCore<T>::cpuStreamPost()
 	std::string traceData = formatter->getTraceExec(start_pc, dasmOutput);
 	server->broadcastStreamData(traceData);
 
-	// Broadcast CPU register state (use existing parameterless method)
-	std::string regData = formatter->getCPURegisters();
+	// Broadcast CPU register state using direct access to current CPU registers
+	// CPUCore<T> inherits from CPURegs, so we can access registers directly via 'this'
+	std::string regData = formatter->getCPURegistersSnapshot(
+		getAF(), getBC(), getDE(), getHL(),
+		getIX(), getIY(), getSP(), getPC());
 	server->broadcastStreamData(regData);
 }
 
@@ -2596,9 +2599,18 @@ template<typename T> void CPUCore<T>::execute2(bool fastForward)
 	// Note: we call scheduler _after_ executing the instruction and before
 	// deciding between executeFast() and executeSlow() (because a
 	// SyncPoint could set an IRQ and then we must choose executeSlow())
+
+	// Check if debug streaming is active (requires slow path for cpuStreamPost)
+	bool debugStreamActive = false;
+	if (!fastForward) {
+		if (auto* server = motherboard.getReactor().getDebugHttpServer()) {
+			debugStreamActive = server->isStreamingActive();
+		}
+	}
+
 	if (fastForward ||
-	    (!interface->anyBreakPoints() && !tracingEnabled)) {
-		// fast path, no breakpoints, no tracing
+	    (!interface->anyBreakPoints() && !tracingEnabled && !debugStreamActive)) {
+		// fast path, no breakpoints, no tracing, no debug streaming
 		do {
 			if (slowInstructions) {
 				--slowInstructions;

@@ -18,9 +18,11 @@
 
 namespace openmsx {
 
-DebugTelnetServer::DebugTelnetServer(int port_, DebugStreamFormatter& formatter_)
+DebugTelnetServer::DebugTelnetServer(int port_, DebugStreamFormatter& formatter_,
+                                     ClientConnectCallback onClientConnect_)
 	: port(port_)
 	, formatter(formatter_)
+	, onClientConnect(std::move(onClientConnect_))
 {
 }
 
@@ -155,8 +157,15 @@ void DebugTelnetServer::acceptConnection(SOCKET clientSocket)
 		clientSocket, formatter);
 	connection->start();
 
-	std::lock_guard<std::mutex> lock(connectionsMutex);
-	connections.push_back(std::move(connection));
+	{
+		std::lock_guard<std::mutex> lock(connectionsMutex);
+		connections.push_back(std::move(connection));
+	}
+
+	// Notify that a client connected (triggers CPU loop exit for debug streaming)
+	if (onClientConnect) {
+		onClientConnect();
+	}
 }
 
 void DebugTelnetServer::broadcast(const std::string& data)

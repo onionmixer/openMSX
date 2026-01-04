@@ -415,6 +415,26 @@ std::string DebugStreamFormatter::getFlagUpdate(const char* flag, bool value)
 		{{"ts", std::to_string(getTimestamp())}});
 }
 
+std::string DebugStreamFormatter::getCPURegistersSnapshot(
+	uint16_t af, uint16_t bc, uint16_t de, uint16_t hl,
+	uint16_t ix, uint16_t iy, uint16_t sp, uint16_t pc)
+{
+	// Format all registers in a single line for efficient streaming
+	// This method receives values directly from CPUCore, avoiding indirect access
+	std::ostringstream val;
+	val << "AF=" << toHex16(af)
+	    << " BC=" << toHex16(bc)
+	    << " DE=" << toHex16(de)
+	    << " HL=" << toHex16(hl)
+	    << " IX=" << toHex16(ix)
+	    << " IY=" << toHex16(iy)
+	    << " SP=" << toHex16(sp)
+	    << " PC=" << toHex16(pc);
+
+	return formatLine("cpu", "reg", "all", val.str(),
+		{{"ts", std::to_string(getTimestamp())}});
+}
+
 std::string DebugStreamFormatter::getMemoryBank()
 {
 	std::lock_guard<std::mutex> lock(accessMutex);

@@ -71,6 +71,11 @@ public:
 	[[nodiscard]] std::string getRegister8Update(const char* reg, uint8_t value);
 	[[nodiscard]] std::string getFlagUpdate(const char* flag, bool value);
 
+	// Direct register snapshot (called from CPUCore with actual register values)
+	[[nodiscard]] std::string getCPURegistersSnapshot(
+		uint16_t af, uint16_t bc, uint16_t de, uint16_t hl,
+		uint16_t ix, uint16_t iy, uint16_t sp, uint16_t pc);
+
 	//-------------------------------------------------------------------------
 	// Machine information (cat: mach)
 	//-------------------------------------------------------------------------

@@ -5,6 +5,7 @@
 #include "Poller.hh"
 
 #include <atomic>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -33,7 +34,10 @@ class DebugTelnetConnection;
 class DebugTelnetServer final
 {
 public:
-	DebugTelnetServer(int port, DebugStreamFormatter& formatter);
+	using ClientConnectCallback = std::function<void()>;
+
+	DebugTelnetServer(int port, DebugStreamFormatter& formatter,
+	                  ClientConnectCallback onClientConnect = nullptr);
 	~DebugTelnetServer();
 
 	DebugTelnetServer(const DebugTelnetServer&) = delete;
@@ -65,6 +69,7 @@ private:
 private:
 	int port;
 	DebugStreamFormatter& formatter;
+	ClientConnectCallback onClientConnect;
 
 	SOCKET listenSocket = OPENMSX_INVALID_SOCKET;
 	std::thread thread;

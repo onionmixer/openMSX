@@ -4,6 +4,8 @@
 #include "DebugInfoProvider.hh"
 #include "DebugStreamFormatter.hh"
 #include "DebugTelnetServer.hh"
+#include "MSXMotherBoard.hh"
+#include "MSXCPU.hh"
 #include "Reactor.hh"
 
 #include "CommandController.hh"
@@ -68,15 +70,34 @@ DebugHttpServer::DebugHttpServer(Reactor& reactor_)
 
 	// Start stream server if enabled
 	if (streamEnableSetting.getBoolean()) {
-		try {
-			streamServer = std::make_unique<DebugTelnetServer>(
-				streamPortSetting.getInt(), *streamFormatter);
-			streamServer->start();
-			streamServerRunning = true;
-		} catch (...) {
-			streamServer.reset();
-			streamServerRunning = false;
-		}
+		startStreamServer();
+	}
+}
+
+void DebugHttpServer::startStreamServer()
+{
+	if (streamServer) {
+		streamServer->stop();
+		streamServer.reset();
+	}
+	streamServerRunning = false;
+
+	try {
+		// Create callback to exit CPU loop when client connects
+		// This ensures the CPU switches to slow path for debug streaming
+		auto onClientConnect = [this]() {
+			if (auto* board = reactor.getMotherBoard()) {
+				board->getCPU().exitCPULoopAsync();
+			}
+		};
+
+		streamServer = std::make_unique<DebugTelnetServer>(
+			streamPortSetting.getInt(), *streamFormatter, onClientConnect);
+		streamServer->start();
+		streamServerRunning = true;
+	} catch (...) {
+		streamServer.reset();
+		streamServerRunning = false;
 	}
 }
 
@@ -173,15 +194,7 @@ void DebugHttpServer::update(const Setting& setting) noexcept
 		streamServerRunning = false;
 
 		if (streamEnableSetting.getBoolean()) {
-			try {
-				streamServer = std::make_unique<DebugTelnetServer>(
-					streamPortSetting.getInt(), *streamFormatter);
-				streamServer->start();
-				streamServerRunning = true;
-			} catch (...) {
-				streamServer.reset();
-				streamServerRunning = false;
-			}
+			startStreamServer();
 		}
 	}
 }
