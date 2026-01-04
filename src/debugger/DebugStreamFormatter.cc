@@ -290,42 +290,42 @@ std::vector<std::string> DebugStreamFormatter::getFullSnapshot()
 				{{"text_support", isText ? "1" : "0"},
 				 {"base", toHex8(base)}}));
 
-			// ===== Text screen (only in TEXT modes) =====
-			if (isText) {
-				VDPVRAM& vram = vdp->getVRAM();
-				auto vramData = vram.getData();
-				int nameTableBase = vdp->getNameTableBase();
-				int columns = (base == DisplayMode::TEXT2) ? 80 : 40;
-				int rows = 24;
+			// // ===== Text screen (only in TEXT modes) =====
+			// if (isText) {
+			// 	VDPVRAM& vram = vdp->getVRAM();
+			// 	auto vramData = vram.getData();
+			// 	int nameTableBase = vdp->getNameTableBase();
+			// 	int columns = (base == DisplayMode::TEXT2) ? 80 : 40;
+			// 	int rows = 24;
 
-				for (int row = 0; row < rows; ++row) {
-					std::string rowText;
-					rowText.reserve(columns);
+			// 	for (int row = 0; row < rows; ++row) {
+			// 		std::string rowText;
+			// 		rowText.reserve(columns);
 
-					int rowAddr = nameTableBase + (row * columns);
+			// 		int rowAddr = nameTableBase + (row * columns);
 
-					for (int col = 0; col < columns; ++col) {
-						int addr = rowAddr + col;
-						if (addr < static_cast<int>(vramData.size())) {
-							uint8_t charCode = vramData[addr];
-							if (charCode >= 32 && charCode < 127) {
-								rowText += static_cast<char>(charCode);
-							} else {
-								rowText += ' ';
-							}
-						} else {
-							rowText += ' ';
-						}
-					}
+			// 		for (int col = 0; col < columns; ++col) {
+			// 			int addr = rowAddr + col;
+			// 			if (addr < static_cast<int>(vramData.size())) {
+			// 				uint8_t charCode = vramData[addr];
+			// 				if (charCode >= 32 && charCode < 127) {
+			// 					rowText += static_cast<char>(charCode);
+			// 				} else {
+			// 					rowText += ' ';
+			// 				}
+			// 			} else {
+			// 				rowText += ' ';
+			// 			}
+			// 		}
 
-					// Pad to fixed width
-					rowText.resize(columns, ' ');
+			// 		// Pad to fixed width
+			// 		rowText.resize(columns, ' ');
 
-					lines.push_back(formatLine("mem", "text", "row", rowText,
-						{{"idx", std::to_string(row)},
-						 {"addr", toHex16(static_cast<uint16_t>(rowAddr))}}));
-				}
-			}
+			// 		lines.push_back(formatLine("mem", "text", "row", rowText,
+			// 			{{"idx", std::to_string(row)},
+			// 			 {"addr", toHex16(static_cast<uint16_t>(rowAddr))}}));
+			// 	}
+			// }
 		}
 	}
 
@@ -592,223 +592,223 @@ std::string DebugStreamFormatter::getTraceExec(uint16_t addr, const std::string&
 		{{"addr", toHex16(addr)}, {"ts", std::to_string(getTimestamp())}});
 }
 
-//-----------------------------------------------------------------------------
-// Text screen (cat: mem, sec: text) - TEXT1/TEXT2 modes only
-//-----------------------------------------------------------------------------
+// //-----------------------------------------------------------------------------
+// // Text screen (cat: mem, sec: text) - TEXT1/TEXT2 modes only
+// //-----------------------------------------------------------------------------
 
-std::vector<std::string> DebugStreamFormatter::getTextScreen()
-{
-	std::lock_guard<std::mutex> lock(accessMutex);
-	std::vector<std::string> lines;
+// std::vector<std::string> DebugStreamFormatter::getTextScreen()
+// {
+// 	std::lock_guard<std::mutex> lock(accessMutex);
+// 	std::vector<std::string> lines;
 
-	MSXMotherBoard* board = getMotherBoard();
-	if (!board) {
-		return lines;
-	}
+// 	MSXMotherBoard* board = getMotherBoard();
+// 	if (!board) {
+// 		return lines;
+// 	}
 
-	// Find VDP device
-	MSXDevice* device = board->findDevice("VDP");
-	if (!device) {
-		return lines;
-	}
+// 	// Find VDP device
+// 	MSXDevice* device = board->findDevice("VDP");
+// 	if (!device) {
+// 		return lines;
+// 	}
 
-	VDP* vdp = dynamic_cast<VDP*>(device);
-	if (!vdp) {
-		return lines;
-	}
+// 	VDP* vdp = dynamic_cast<VDP*>(device);
+// 	if (!vdp) {
+// 		return lines;
+// 	}
 
-	DisplayMode mode = vdp->getDisplayMode();
-	if (!mode.isTextMode()) {
-		// Not in text mode - return empty
-		return lines;
-	}
+// 	DisplayMode mode = vdp->getDisplayMode();
+// 	if (!mode.isTextMode()) {
+// 		// Not in text mode - return empty
+// 		return lines;
+// 	}
 
-	VDPVRAM& vram = vdp->getVRAM();
-	auto vramData = vram.getData();
+// 	VDPVRAM& vram = vdp->getVRAM();
+// 	auto vramData = vram.getData();
 
-	// Get name table base address from VDP registers
-	int nameTableBase = vdp->getNameTableBase();
+// 	// Get name table base address from VDP registers
+// 	int nameTableBase = vdp->getNameTableBase();
 
-	// Determine columns based on mode
-	// TEXT1 = 40 columns, TEXT2 = 80 columns
-	int columns = (mode.getBase() == DisplayMode::TEXT2) ? 80 : 40;
-	int rows = 24;
+// 	// Determine columns based on mode
+// 	// TEXT1 = 40 columns, TEXT2 = 80 columns
+// 	int columns = (mode.getBase() == DisplayMode::TEXT2) ? 80 : 40;
+// 	int rows = 24;
 
-	for (int row = 0; row < rows; ++row) {
-		std::string rowText;
-		rowText.reserve(columns);
+// 	for (int row = 0; row < rows; ++row) {
+// 		std::string rowText;
+// 		rowText.reserve(columns);
 
-		int rowAddr = nameTableBase + (row * columns);
+// 		int rowAddr = nameTableBase + (row * columns);
 
-		for (int col = 0; col < columns; ++col) {
-			int addr = rowAddr + col;
-			if (addr < static_cast<int>(vramData.size())) {
-				uint8_t charCode = vramData[addr];
-				// Convert to printable ASCII
-				// MSX uses standard ASCII for printable chars (32-126)
-				// Non-printable chars are replaced with space
-				if (charCode >= 32 && charCode < 127) {
-					rowText += static_cast<char>(charCode);
-				} else {
-					rowText += ' ';
-				}
-			} else {
-				rowText += ' ';
-			}
-		}
+// 		for (int col = 0; col < columns; ++col) {
+// 			int addr = rowAddr + col;
+// 			if (addr < static_cast<int>(vramData.size())) {
+// 				uint8_t charCode = vramData[addr];
+// 				// Convert to printable ASCII
+// 				// MSX uses standard ASCII for printable chars (32-126)
+// 				// Non-printable chars are replaced with space
+// 				if (charCode >= 32 && charCode < 127) {
+// 					rowText += static_cast<char>(charCode);
+// 				} else {
+// 					rowText += ' ';
+// 				}
+// 			} else {
+// 				rowText += ' ';
+// 			}
+// 		}
 
-		// Trim trailing spaces for cleaner output
-		size_t endPos = rowText.find_last_not_of(' ');
-		if (endPos != std::string::npos) {
-			rowText = rowText.substr(0, endPos + 1);
-		} else {
-			rowText.clear(); // All spaces
-		}
+// 		// Trim trailing spaces for cleaner output
+// 		size_t endPos = rowText.find_last_not_of(' ');
+// 		if (endPos != std::string::npos) {
+// 			rowText = rowText.substr(0, endPos + 1);
+// 		} else {
+// 			rowText.clear(); // All spaces
+// 		}
 
-		// Pad to fixed width for consistent output
-		rowText.resize(columns, ' ');
+// 		// Pad to fixed width for consistent output
+// 		rowText.resize(columns, ' ');
 
-		lines.push_back(formatLine("mem", "text", "row", rowText,
-			{{"idx", std::to_string(row)},
-			 {"addr", toHex16(static_cast<uint16_t>(rowAddr))}}));
-	}
+// 		lines.push_back(formatLine("mem", "text", "row", rowText,
+// 			{{"idx", std::to_string(row)},
+// 			 {"addr", toHex16(static_cast<uint16_t>(rowAddr))}}));
+// 	}
 
-	return lines;
-}
+// 	return lines;
+// }
 
-std::string DebugStreamFormatter::getTextScreenRow(int row)
-{
-	std::lock_guard<std::mutex> lock(accessMutex);
+// std::string DebugStreamFormatter::getTextScreenRow(int row)
+// {
+// 	std::lock_guard<std::mutex> lock(accessMutex);
 
-	if (row < 0 || row >= 24) {
-		return "";
-	}
+// 	if (row < 0 || row >= 24) {
+// 		return "";
+// 	}
 
-	MSXMotherBoard* board = getMotherBoard();
-	if (!board) {
-		return "";
-	}
+// 	MSXMotherBoard* board = getMotherBoard();
+// 	if (!board) {
+// 		return "";
+// 	}
 
-	// Find VDP device
-	MSXDevice* device = board->findDevice("VDP");
-	if (!device) {
-		return "";
-	}
+// 	// Find VDP device
+// 	MSXDevice* device = board->findDevice("VDP");
+// 	if (!device) {
+// 		return "";
+// 	}
 
-	VDP* vdp = dynamic_cast<VDP*>(device);
-	if (!vdp) {
-		return "";
-	}
+// 	VDP* vdp = dynamic_cast<VDP*>(device);
+// 	if (!vdp) {
+// 		return "";
+// 	}
 
-	DisplayMode mode = vdp->getDisplayMode();
-	if (!mode.isTextMode()) {
-		return "";
-	}
+// 	DisplayMode mode = vdp->getDisplayMode();
+// 	if (!mode.isTextMode()) {
+// 		return "";
+// 	}
 
-	VDPVRAM& vram = vdp->getVRAM();
-	auto vramData = vram.getData();
+// 	VDPVRAM& vram = vdp->getVRAM();
+// 	auto vramData = vram.getData();
 
-	int nameTableBase = vdp->getNameTableBase();
-	int columns = (mode.getBase() == DisplayMode::TEXT2) ? 80 : 40;
+// 	int nameTableBase = vdp->getNameTableBase();
+// 	int columns = (mode.getBase() == DisplayMode::TEXT2) ? 80 : 40;
 
-	std::string rowText;
-	rowText.reserve(columns);
+// 	std::string rowText;
+// 	rowText.reserve(columns);
 
-	int rowAddr = nameTableBase + (row * columns);
+// 	int rowAddr = nameTableBase + (row * columns);
 
-	for (int col = 0; col < columns; ++col) {
-		int addr = rowAddr + col;
-		if (addr < static_cast<int>(vramData.size())) {
-			uint8_t charCode = vramData[addr];
-			if (charCode >= 32 && charCode < 127) {
-				rowText += static_cast<char>(charCode);
-			} else {
-				rowText += ' ';
-			}
-		} else {
-			rowText += ' ';
-		}
-	}
+// 	for (int col = 0; col < columns; ++col) {
+// 		int addr = rowAddr + col;
+// 		if (addr < static_cast<int>(vramData.size())) {
+// 			uint8_t charCode = vramData[addr];
+// 			if (charCode >= 32 && charCode < 127) {
+// 				rowText += static_cast<char>(charCode);
+// 			} else {
+// 				rowText += ' ';
+// 			}
+// 		} else {
+// 			rowText += ' ';
+// 		}
+// 	}
 
-	// Pad to fixed width
-	rowText.resize(columns, ' ');
+// 	// Pad to fixed width
+// 	rowText.resize(columns, ' ');
 
-	return formatLine("mem", "text", "row", rowText,
-		{{"idx", std::to_string(row)},
-		 {"addr", toHex16(static_cast<uint16_t>(rowAddr))}});
-}
+// 	return formatLine("mem", "text", "row", rowText,
+// 		{{"idx", std::to_string(row)},
+// 		 {"addr", toHex16(static_cast<uint16_t>(rowAddr))}});
+// }
 
-std::string DebugStreamFormatter::getScreenModeInfo()
-{
-	std::lock_guard<std::mutex> lock(accessMutex);
+// std::string DebugStreamFormatter::getScreenModeInfo()
+// {
+// 	std::lock_guard<std::mutex> lock(accessMutex);
 
-	MSXMotherBoard* board = getMotherBoard();
-	if (!board) {
-		return formatLine("mach", "video", "mode", "no_machine");
-	}
+// 	MSXMotherBoard* board = getMotherBoard();
+// 	if (!board) {
+// 		return formatLine("mach", "video", "mode", "no_machine");
+// 	}
 
-	// Find VDP device
-	MSXDevice* device = board->findDevice("VDP");
-	if (!device) {
-		return formatLine("mach", "video", "mode", "no_vdp");
-	}
+// 	// Find VDP device
+// 	MSXDevice* device = board->findDevice("VDP");
+// 	if (!device) {
+// 		return formatLine("mach", "video", "mode", "no_vdp");
+// 	}
 
-	VDP* vdp = dynamic_cast<VDP*>(device);
-	if (!vdp) {
-		return formatLine("mach", "video", "mode", "invalid_vdp");
-	}
+// 	VDP* vdp = dynamic_cast<VDP*>(device);
+// 	if (!vdp) {
+// 		return formatLine("mach", "video", "mode", "invalid_vdp");
+// 	}
 
-	DisplayMode mode = vdp->getDisplayMode();
-	uint8_t base = mode.getBase();
+// 	DisplayMode mode = vdp->getDisplayMode();
+// 	uint8_t base = mode.getBase();
 
-	std::string modeName;
-	std::string textSupport = "0";
+// 	std::string modeName;
+// 	std::string textSupport = "0";
 
-	switch (base) {
-		case DisplayMode::TEXT1:
-			modeName = "TEXT1";
-			textSupport = "1";
-			break;
-		case DisplayMode::TEXT2:
-			modeName = "TEXT2";
-			textSupport = "1";
-			break;
-		case DisplayMode::TEXT1Q:
-			modeName = "TEXT1Q";
-			textSupport = "1";
-			break;
-		case DisplayMode::GRAPHIC1:
-			modeName = "GRAPHIC1";
-			break;
-		case DisplayMode::GRAPHIC2:
-			modeName = "GRAPHIC2";
-			break;
-		case DisplayMode::GRAPHIC3:
-			modeName = "GRAPHIC3";
-			break;
-		case DisplayMode::GRAPHIC4:
-			modeName = "GRAPHIC4";
-			break;
-		case DisplayMode::GRAPHIC5:
-			modeName = "GRAPHIC5";
-			break;
-		case DisplayMode::GRAPHIC6:
-			modeName = "GRAPHIC6";
-			break;
-		case DisplayMode::GRAPHIC7:
-			modeName = "GRAPHIC7";
-			break;
-		case DisplayMode::MULTICOLOR:
-			modeName = "MULTICOLOR";
-			break;
-		default:
-			modeName = "UNKNOWN";
-			break;
-	}
+// 	switch (base) {
+// 		case DisplayMode::TEXT1:
+// 			modeName = "TEXT1";
+// 			textSupport = "1";
+// 			break;
+// 		case DisplayMode::TEXT2:
+// 			modeName = "TEXT2";
+// 			textSupport = "1";
+// 			break;
+// 		case DisplayMode::TEXT1Q:
+// 			modeName = "TEXT1Q";
+// 			textSupport = "1";
+// 			break;
+// 		case DisplayMode::GRAPHIC1:
+// 			modeName = "GRAPHIC1";
+// 			break;
+// 		case DisplayMode::GRAPHIC2:
+// 			modeName = "GRAPHIC2";
+// 			break;
+// 		case DisplayMode::GRAPHIC3:
+// 			modeName = "GRAPHIC3";
+// 			break;
+// 		case DisplayMode::GRAPHIC4:
+// 			modeName = "GRAPHIC4";
+// 			break;
+// 		case DisplayMode::GRAPHIC5:
+// 			modeName = "GRAPHIC5";
+// 			break;
+// 		case DisplayMode::GRAPHIC6:
+// 			modeName = "GRAPHIC6";
+// 			break;
+// 		case DisplayMode::GRAPHIC7:
+// 			modeName = "GRAPHIC7";
+// 			break;
+// 		case DisplayMode::MULTICOLOR:
+// 			modeName = "MULTICOLOR";
+// 			break;
+// 		default:
+// 			modeName = "UNKNOWN";
+// 			break;
+// 	}
 
-	return formatLine("mach", "video", "mode", modeName,
-		{{"text_support", textSupport},
-		 {"base", toHex8(base)}});
-}
+// 	return formatLine("mach", "video", "mode", modeName,
+// 		{{"text_support", textSupport},
+// 		 {"base", toHex8(base)}});
+// }
 
 } // namespace openmsx
