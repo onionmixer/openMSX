@@ -15,7 +15,7 @@ namespace openmsx {
 
 DebugTelnetConnection::DebugTelnetConnection(SOCKET socket_,
                                              DebugStreamFormatter& formatter_)
-	: socket(socket_)
+	: socket(socket_)  // atomic initialization
 	, formatter(formatter_)
 {
 }
@@ -35,9 +35,10 @@ void DebugTelnetConnection::stop()
 	closed.store(true);
 	poller.abort();
 
-	if (socket != OPENMSX_INVALID_SOCKET) {
-		sock_close(socket);
-		socket = OPENMSX_INVALID_SOCKET;
+	// Atomically exchange socket with INVALID to prevent races
+	auto oldSocket = socket.exchange(OPENMSX_INVALID_SOCKET);
+	if (oldSocket != OPENMSX_INVALID_SOCKET) {
+		sock_close(oldSocket);
 	}
 
 	if (thread.joinable()) {
@@ -56,12 +57,18 @@ void DebugTelnetConnection::run()
 
 		// Keep connection alive, monitoring for disconnect
 		while (!closed.load() && !poller.aborted()) {
+			// Atomic load of socket
+			SOCKET sock = socket.load();
+			if (sock == OPENMSX_INVALID_SOCKET) {
+				break;
+			}
+
 			// Check if client disconnected by peeking
 			char peekBuf;
 #ifdef _WIN32
-			int result = recv(socket, &peekBuf, 1, MSG_PEEK);
+			int result = recv(sock, &peekBuf, 1, MSG_PEEK);
 #else
-			int result = recv(socket, &peekBuf, 1, MSG_PEEK | MSG_DONTWAIT);
+			int result = recv(sock, &peekBuf, 1, MSG_PEEK | MSG_DONTWAIT);
 #endif
 			if (result == 0) {
 				// Client disconnected
@@ -89,7 +96,10 @@ void DebugTelnetConnection::sendTelnetInit()
 	};
 
 	std::lock_guard<std::mutex> lock(sendMutex);
-	::send(socket, reinterpret_cast<const char*>(initSeq), sizeof(initSeq), 0);
+	SOCKET sock = socket.load();
+	if (sock != OPENMSX_INVALID_SOCKET) {
+		::send(sock, reinterpret_cast<const char*>(initSeq), sizeof(initSeq), 0);
+	}
 }
 
 void DebugTelnetConnection::sendWelcome()
@@ -109,7 +119,7 @@ void DebugTelnetConnection::sendWelcome()
 
 bool DebugTelnetConnection::send(const std::string& data)
 {
-	if (closed.load() || socket == OPENMSX_INVALID_SOCKET) {
+	if (closed.load()) {
 		return false;
 	}
 
@@ -123,7 +133,14 @@ bool DebugTelnetConnection::send(const std::string& data)
 	}
 
 	std::lock_guard<std::mutex> lock(sendMutex);
-	int result = ::send(socket, line.c_str(), static_cast<int>(line.size()), 0);
+
+	// Check socket validity under the lock to prevent race with stop()
+	SOCKET sock = socket.load();
+	if (sock == OPENMSX_INVALID_SOCKET) {
+		return false;
+	}
+
+	int result = ::send(sock, line.c_str(), static_cast<int>(line.size()), 0);
 	if (result == SOCKET_ERROR) {
 		closed.store(true);
 		return false;

@@ -50,7 +50,7 @@ private:
 	void sendWelcome();
 
 private:
-	SOCKET socket;
+	std::atomic<SOCKET> socket{OPENMSX_INVALID_SOCKET};
 	DebugStreamFormatter& formatter;
 
 	std::thread thread;

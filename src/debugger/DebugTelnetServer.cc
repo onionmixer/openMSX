@@ -116,6 +116,7 @@ void DebugTelnetServer::mainLoop()
 	fcntl(listenSocket, F_SETFL, O_NONBLOCK);
 #endif
 
+	int cleanupCounter = 0;
 	while (running) {
 #ifndef _WIN32
 		if (poller.poll(listenSocket)) {
@@ -133,6 +134,12 @@ void DebugTelnetServer::mainLoop()
 
 		if (clientSocket == OPENMSX_INVALID_SOCKET) {
 			if (errno == one_of(EAGAIN, EWOULDBLOCK)) {
+				// Periodically clean up even when no new connections arrive
+				++cleanupCounter;
+				if (cleanupCounter >= 10) {  // Every ~10 poll cycles
+					cleanupCounter = 0;
+					cleanupConnections();
+				}
 				continue;
 			} else {
 				break;
@@ -146,8 +153,9 @@ void DebugTelnetServer::mainLoop()
 
 		acceptConnection(clientSocket);
 
-		// Periodically clean up closed connections
+		// Clean up after each new connection
 		cleanupConnections();
+		cleanupCounter = 0;
 	}
 }
 
@@ -207,7 +215,14 @@ void DebugTelnetServer::cleanupConnections()
 {
 	std::lock_guard<std::mutex> lock(connectionsMutex);
 
-	// Remove closed connections
+	// First, stop all closed connections to ensure threads are joined
+	for (auto& conn : connections) {
+		if (conn && conn->isClosed()) {
+			conn->stop();  // This will join the thread
+		}
+	}
+
+	// Then remove them from the vector
 	std::erase_if(connections, [](const auto& conn) {
 		return !conn || conn->isClosed();
 	});
