@@ -239,9 +239,15 @@ uint8_t I8251::readStatus(EmuTime time)
 
 uint8_t I8251::readTrans(EmuTime time)
 {
+	uint8_t result = recvBuf; // Save before signal may overwrite
 	status &= ~STAT_RXRDY;
 	interface.setRxRDY(false, time);
-	return recvBuf;
+	// Trigger signal() so the pluggable can deliver the next queued byte
+	// immediately, instead of waiting for the next execRecv timer.
+	if (recvReady) {
+		interface.signal(time);
+	}
+	return result;
 }
 
 void I8251::writeTrans(uint8_t value, EmuTime time)
@@ -269,6 +275,10 @@ void I8251::recvByte(uint8_t value, EmuTime time)
 	// TODO STAT_PE / STAT_FE / STAT_SYN_BRK
 	assert(recvReady && (command & CMD_RXE));
 	if (status & STAT_RXRDY) {
+		// Overrun: previous byte not yet read by CPU.
+		// Real i8251 discards the new byte and keeps the old one.
+		// With RS232Host isRxBusy() check, this path should not be reached
+		// in normal operation (safety net only).
 		status |= STAT_OE;
 	} else {
 		recvBuf = value;

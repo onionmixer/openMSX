@@ -44,7 +44,11 @@ static void EnableConsoleOutput()
 static void initializeSDL()
 {
 	int flags = 0;
-	flags |= SDL_INIT_JOYSTICK;
+	// Workaround hook: allow disabling joystick subsystem init when host SDL/udev
+	// combinations are unstable in headless/containerized environments.
+	if (!std::getenv("OPENMSX_DISABLE_SDL_JOYSTICK")) {
+		flags |= SDL_INIT_JOYSTICK;
+	}
 #ifndef NDEBUG
 	flags |= SDL_INIT_NOPARACHUTE;
 #endif

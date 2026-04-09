@@ -401,6 +401,11 @@ bool MSXRS232::acceptsData()
 	return i8251.isRecvEnabled();
 }
 
+bool MSXRS232::isRxBusy() const
+{
+	return (i8251.getStatus() & 0x02) != 0; // STAT_RXRDY
+}
+
 void MSXRS232::setDataBits(DataBits bits)
 {
 	i8251.setDataBits(bits);

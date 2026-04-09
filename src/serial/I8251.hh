@@ -43,6 +43,7 @@ public:
 	[[nodiscard]] ClockPin& getClockPin() { return clock; }
 	[[nodiscard]] bool isRecvReady() const { return recvReady; }
 	[[nodiscard]] bool isRecvEnabled() const;
+	[[nodiscard]] uint8_t getStatus() const { return status; }
 
 	// SerialDataInterface
 	void setDataBits(DataBits bits) override { recvDataBits = bits; }
