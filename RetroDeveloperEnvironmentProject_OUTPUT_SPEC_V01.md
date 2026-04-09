@@ -589,5 +589,5 @@
 
 ## 참고 문서
 
-- AppleWin Debug Server: `AppleWin/source/debugserver/`
-- openMSX Debug HTTP: `openMSX/src/debugger/`
+- AppleWin Debug Server: `Emulator/AppleWin/source/debugserver/`
+- openMSX Debug HTTP: `Emulator/openMSX/src/debugger/`

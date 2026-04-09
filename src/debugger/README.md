@@ -250,7 +250,7 @@ sources = files(
 
 ## Related Documentation
 
-- [OUTPUT_SPEC_V01.md](../../../RetroDeveloperEnvironmentProject_OUTPUT_SPEC_V01.md) - JSON Lines format specification
+- [OUTPUT_SPEC_V01.md](../../../../specs/RetroDeveloperEnvironmentProject_OUTPUT_SPEC_V01.md) - JSON Lines format specification
 - [openMSX Documentation](https://openmsx.org/manual/)
 
 ## License
