@@ -19,6 +19,9 @@
 #include "PrinterPortSimpl.hh"
 #include "RS232Net.hh"
 #include "RS232Tester.hh"
+#ifndef _WIN32
+#include "RS232Host.hh"
+#endif
 #include "Reactor.hh"
 #include "SETetrisDongle.hh"
 #include "Touchpad.hh"
@@ -101,6 +104,10 @@ void PluggableFactory::createAll(PluggingController& controller,
 		eventDistributor, scheduler, commandController));
 	controller.registerPluggable(std::make_unique<RS232Net>(
 		eventDistributor, scheduler, commandController));
+#ifndef _WIN32
+	controller.registerPluggable(std::make_unique<RS232Host>(
+		eventDistributor, scheduler, commandController));
+#endif
 
 	// Sampled audio:
 	controller.registerPluggable(std::make_unique<PrinterPortSimpl>(

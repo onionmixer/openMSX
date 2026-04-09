@@ -19,3 +19,6 @@ SYMLINK_FOR_BINARY:=true
 # Install content of Contrib/ directory?
 # Currently this contains a version of C-BIOS.
 INSTALL_CONTRIB:=true
+
+# Disable ALSA MIDI component in this environment to avoid /dev/snd/seq dependency.
+COMPONENT_ALSAMIDI:=false

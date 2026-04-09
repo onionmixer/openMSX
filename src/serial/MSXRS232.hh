@@ -40,6 +40,7 @@ public:
 	void recvByte(uint8_t value, EmuTime time) override;
 	[[nodiscard]] bool ready() override;
 	[[nodiscard]] bool acceptsData() override;
+	[[nodiscard]] bool isRxBusy() const override;
 
 	template<typename Archive>
 	void serialize(Archive& ar, unsigned version);
