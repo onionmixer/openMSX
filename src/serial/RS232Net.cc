@@ -274,6 +274,13 @@ void RS232Net::signal(EmuTime time)
 	}
 
 	if (!conn->ready() || !RTS) return;
+	if (conn->isRxBusy()) {
+		return; // RXRDY still set — defer delivery, byte stays in queue
+		        // (i8251 backpressure 노출 활용; RS232Host 와 동일 패턴).
+		        // 누락 시 9600 baud RX burst 가 i8251 single-byte buffer 에
+		        // overrun → OE set + byte discard. drain 은 readTrans/
+		        // execRecv 의 interface.signal() 재호출로 보장.
+	}
 
 	std::scoped_lock lock(mutex);
 	if (queue.empty()) return;

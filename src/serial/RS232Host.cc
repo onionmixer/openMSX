@@ -218,9 +218,18 @@ void RS232Host::recvByte(uint8_t value_, EmuTime /*time*/)
 {
 	if (fd < 0) return;
 	auto value = static_cast<char>(value_);
-	if (write(fd, &value, 1) < 0) {
+	// EAGAIN(출력버퍼 일시 full)은 busy-loop 으로 즉시 재시도(D-35). 호스트에서
+	// 1바이트씩 + EAGAIN busy-loop 로 보내면 GTM 경유 57B 가 전부 전달됨을 확인.
+	// close(reset)/POLLOUT(hang)/blocking(30B) 은 모두 실패, 이 방식만 통과.
+	for (;;) {
+		ssize_t n = write(fd, &value, 1);
+		if (n == 1) return;
+		if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+			continue;  // drain 될 때까지 즉시 재시도 (상대가 따라잡게)
+		}
 		close(fd);
 		fd = -1;
+		return;
 	}
 }
 
