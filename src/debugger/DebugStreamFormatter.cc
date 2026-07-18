@@ -107,7 +107,7 @@ std::string DebugStreamFormatter::getHelloMessage()
 	std::lock_guard<std::mutex> lock(accessMutex);
 	// Spec: val should be "openMSX <version>", ver is protocol version
 	// Version::full() already returns "openMSX <version>"
-	return formatLine("sys", "conn", "hello", Version::full(),
+	return formatLine("sys", "conn", "hello", std::string(Version::full()),
 		{{"ver", PROTOCOL_VERSION}, {"ts", std::to_string(getTimestamp())}});
 }
 
