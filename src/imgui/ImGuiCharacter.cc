@@ -12,7 +12,6 @@
 
 #include "one_of.hh"
 #include "ranges.hh"
-#include "view.hh"
 
 #include <imgui.h>
 
@@ -24,11 +23,8 @@ using namespace std::literals;
 
 ImGuiCharacter::ImGuiCharacter(ImGuiManager& manager_, size_t index)
 	: ImGuiPart(manager_)
-	, title("Tile viewer")
+	, title(strCat("Tile viewer", strCat_if(index, " (", index + 1, ')')))
 {
-	if (index) {
-		strAppend(title, " (", index + 1, ')');
-	}
 }
 
 void ImGuiCharacter::save(ImGuiTextBuffer& buf)
@@ -63,7 +59,7 @@ void ImGuiCharacter::initHexDigits()
 
 	// transform to 32-bit RGBA
 	std::array<uint32_t, totalSize> pixels;
-	for (auto [c, p] : view::zip(glyphs, pixels)) {
+	for (auto [c, p] : std::views::zip(glyphs, pixels)) {
 		p = (c == ' ') ? ImColor(0.0f, 0.0f, 0.0f, 0.0f)  // transparent
 		  : (c == '.') ? ImColor(0.0f, 0.0f, 0.0f, 0.7f)  // black semi-transparent outline
 		               : ImColor(1.0f, 1.0f, 1.0f, 0.7f); // white semi-transparent
@@ -441,7 +437,7 @@ void ImGuiCharacter::paint(MSXMotherBoard* motherBoard)
 			}
 		};
 		auto formatBinaryData = [&](unsigned address) {
-			return formatToString([&](unsigned addr){ return vram[addr]; }, address, address + 7, {}, 1, {}, "%02X", manager.getInterpreter());
+			return formatToString([&](unsigned addr){ return vram[addr]; }, address, address + 7, {}, 1, {}, ", ", "%02X", manager.getInterpreter());
 		};
 		auto getPatternFromGrid = [&] {
 			return gridPosition.x + 32 * gridPosition.y;
@@ -589,7 +585,7 @@ void ImGuiCharacter::paint(MSXMotherBoard* motherBoard)
 					auto thickness = zm.y * 0.5f;
 					auto zm1 = 1.5f * zm;
 					auto zm3 = 3.5f * zm;
-					drawList->AddRect(center - zm, center + zm, color, 0.0f, 0, thickness);
+					drawList->AddRect(center - zm, center + zm, color, 0.0f, thickness);
 					drawList->AddLine(center - gl::vec2{zm1.x, 0.0f}, center - gl::vec2{zm3.x, 0.0f}, color, thickness);
 					drawList->AddLine(center + gl::vec2{zm1.x, 0.0f}, center + gl::vec2{zm3.x, 0.0f}, color, thickness);
 					drawList->AddLine(center - gl::vec2{0.0f, zm1.y}, center - gl::vec2{0.0f, zm3.y}, color, thickness);

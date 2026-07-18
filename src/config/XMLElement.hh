@@ -5,6 +5,7 @@
 
 #include "monotonic_allocator.hh"
 #include "serialize_meta.hh"
+#include "zstring_view.hh"
 
 #include <cassert>
 #include <concepts>
@@ -191,11 +192,11 @@ public:
 	explicit XMLElement(const char* name_) : name(name_) {}
 	XMLElement(const char* name_, const char* data_) : name(name_), data(data_) {}
 
-	[[nodiscard]] std::string_view getName() const { return name; }
+	[[nodiscard]] zstring_view getName() const { return name; }
 	void clearName() { name = ""; } // hack to 'remove' child from findChild()
 
-	[[nodiscard]] std::string_view getData() const {
-		return data ? std::string_view(data) : std::string_view();
+	[[nodiscard]] zstring_view getData() const {
+		return data ? zstring_view(data) : zstring_view{};
 	}
 	XMLElement* setData(const char* data_) {
 		data = data_;
@@ -206,6 +207,7 @@ public:
 	[[nodiscard]] const XMLElement* getFirstChild() const { return firstChild; }
 	[[nodiscard]] XMLElement* getFirstChild() { return firstChild; }
 	[[nodiscard]] const XMLElement* findChild(std::string_view childName) const;
+	[[nodiscard]] const XMLElement* findChildWithAttribute(std::string_view childName, std::string_view attrName, std::string_view attrValue) const;
 	[[nodiscard]] XMLElement* findChild(std::string_view childName);
 	[[nodiscard]] XMLElement* findChild(std::string_view childName, XMLElement*& hint);
 	[[nodiscard]] const XMLElement& getChild(std::string_view childName) const;
@@ -307,7 +309,7 @@ public:
 		: allocator(std::forward<T>(t), std::forward<Args>(args)...) {}
 
 	// Load/parse an xml file. Requires that the document is still empty.
-	void load(const std::string& filename, std::string_view systemID);
+	void load(zstring_view filename, std::string_view systemID);
 
 	[[nodiscard]] const XMLElement* getRoot() const { return root; }
 	[[nodiscard]] XMLElement* getRoot() { return root; }

@@ -26,11 +26,8 @@ using namespace std::literals;
 
 ImGuiSpriteViewer::ImGuiSpriteViewer(ImGuiManager& manager_, size_t index)
 	: ImGuiPart(manager_)
-	, title("Sprite viewer")
+	, title(strCat("Sprite viewer", strCat_if(index, " (", index + 1, ')')))
 {
-	if (index) {
-		strAppend(title, " (", index + 1, ')');
-	}
 }
 
 void ImGuiSpriteViewer::save(ImGuiTextBuffer& buf)
@@ -335,7 +332,7 @@ void ImGuiSpriteViewer::paint(MSXMotherBoard* motherBoard)
 			});
 		};
 		auto formatClipboardData = [&](unsigned address, unsigned size) {
-			return formatToString([&](unsigned addr) { return vram[addr]; }, address, address + size - 1, {}, 1, {}, "%02X", manager.getInterpreter());
+			return formatToString([&](unsigned addr) { return vram[addr]; }, address, address + size - 1, {}, 1, {}, ", ", "%02X", manager.getInterpreter());
 		};
 
 		int mode = manMode ? manualMode : vdpMode;
@@ -473,7 +470,9 @@ void ImGuiSpriteViewer::paint(MSXMotherBoard* motherBoard)
 		im::TreeNode("Sprite attributes", ImGuiTreeNodeFlags_DefaultOpen, [&]{
 			auto zoomSize = float(zm * size);
 			auto fullSize = zoomSize * gl::vec2(8, 4);
-			im::Child("##attrib", {0, fullSize.y}, 0, ImGuiWindowFlags_HorizontalScrollbar, [&]{
+			auto hoverY = 3.0f * (ImGui::GetTextLineHeight() - 1.0f)
+			            + float(3 * zm) * float(size);
+			im::Child("##attrib", {0, std::max(fullSize.y, hoverY)}, 0, ImGuiWindowFlags_HorizontalScrollbar, [&]{
 				if (mode == 0) {
 					ImGui::TextUnformatted("No sprites in this screen mode"sv);
 				} else {
@@ -791,7 +790,7 @@ void ImGuiSpriteViewer::paint(MSXMotherBoard* motherBoard)
 					if (hovered) {
 						ImGui::Separator();
 						auto [hx, hy] = hoverPos;
-						ImGui::Text("x=%d y=%d", hx, hy);
+						ImGui::StrCat("x,y=", hx, ',', hy, " (0x", hex_string<2>(hx), ",0x", hex_string<2>(hy), ')');
 						ImGui::Spacing();
 
 						for (int i : xrange(nrClippedBoxes)) {
@@ -801,7 +800,9 @@ void ImGuiSpriteViewer::paint(MSXMotherBoard* motherBoard)
 								if (drawBoundingBox && (boundingBoxOnAll == 0)) {
 									drawBox(b.x, b.y, b.w, b.h);
 								}
-								ImGui::Text("sprite=%d x=%d y=%d pat=%d", b.sprite, b.vramX, b.vramY, b.pattern);
+								ImGui::Bullet();
+								ImGui::StrCat("sprite ", b.sprite, ": pat=", b.pattern, " (0x", hex_string<2>(b.pattern), ")\n"
+								              "x,y=", b.vramX, ',', b.vramY, " (0x", hex_string<2>(b.vramX), ",0x", hex_string<2>(b.vramY), ')');
 							}
 						}
 					}

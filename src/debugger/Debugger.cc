@@ -38,6 +38,7 @@ Debugger::Debugger(MSXMotherBoard& motherBoard_)
 	, cmd(motherBoard.getCommandController(),
 	      motherBoard.getStateChangeDistributor(),
 	      motherBoard.getScheduler())
+	, tracer(*this)
 {
 }
 
@@ -77,20 +78,24 @@ Debuggable& Debugger::getDebuggable(std::string_view name)
 
 void Debugger::registerProbe(ProbeBase& probe)
 {
-	assert(!probes.contains(probe.getName()));
-	probes.insert_noDuplicateCheck(&probe);
+	auto it = std::ranges::lower_bound(probes, probe.getName(), {}, &ProbeBase::getName);
+	assert(it == probes.end() || (*it)->getName() != probe.getName()); // was not yet present
+	probes.insert(it, &probe);
+	tracer.probeCreated(*this, probe);
 }
 
 void Debugger::unregisterProbe(ProbeBase& probe)
 {
-	assert(probes.contains(probe.getName()));
-	probes.erase(probe.getName());
+	tracer.probeRemoved(probe);
+	auto it = std::ranges::lower_bound(probes, probe.getName(), {}, &ProbeBase::getName);
+	assert(it != probes.end() && (*it)->getName() == probe.getName());
+	probes.erase(it);
 }
 
 ProbeBase* Debugger::findProbe(std::string_view name)
 {
-	auto it = probes.find(name);
-	return (it != std::end(probes)) ? *it : nullptr;
+	auto it = std::ranges::lower_bound(probes, name, {}, &ProbeBase::getName);
+	return (it != probes.end() && (*it)->getName() == name) ? *it : nullptr;
 }
 
 ProbeBase& Debugger::getProbe(std::string_view name)
@@ -172,6 +177,8 @@ void Debugger::transfer(Debugger& other)
 		}
 	}
 
+	tracer.transfer(other, *this);
+
 	// Breakpoints and conditions are (currently) global, so no need to
 	// copy those.
 }
@@ -247,7 +254,8 @@ void Debugger::Cmd::execute(
 		"remove_condition",  [&]{ removeCondition(tokens, result); },
 		"list_conditions",   [&]{ listConditions(tokens, result); },
 		"probe",             [&]{ probe(tokens, result); },
-		"symbols",           [&]{ symbols(tokens, result); });
+		"symbols",           [&]{ symbols(tokens, result); },
+		"trace",             [&]{ auto& d = debugger(); d.tracer.execute(d, tokens, result, time); });
 }
 
 void Debugger::Cmd::list(TclObject& result)
@@ -326,7 +334,7 @@ void Debugger::Cmd::writeBlock(std::span<const TclObject> tokens, TclObject& /*r
 	if (addr >= devSize) {
 		throw CommandException("Invalid address");
 	}
-	auto buf = tokens[4].getBinary();
+	auto buf = tokens[4].getBinary(getInterpreter());
 	if ((buf.size() + addr) > devSize) {
 		throw CommandException("Invalid size");
 	}
@@ -365,7 +373,7 @@ void Debugger::Cmd::disasm(std::span<const TclObject> tokens, TclObject& result,
 void Debugger::Cmd::disasmBlob(std::span<const TclObject> tokens, TclObject& result) const
 {
 	checkNumArgs(tokens, Between{4, 5}, Prefix{2}, "value addr ?function?");
-	std::span<const uint8_t> bin = tokens[2].getBinary();
+	std::span<const uint8_t> bin = tokens[2].getBinary(getInterpreter());
 	auto len = instructionLength(bin);
 	if (!len || *len > bin.size()) {
 		throw CommandException("Blob does not contain a complete Z80 instruction");
@@ -989,8 +997,7 @@ void Debugger::Cmd::probe(std::span<const TclObject> tokens, TclObject& result)
 }
 void Debugger::Cmd::probeList(std::span<const TclObject> /*tokens*/, TclObject& result)
 {
-	result.addListElements(std::views::transform(debugger().probes,
-		[](auto* p) { return p->getName(); }));
+	result.addListElements(std::views::transform(debugger().probes, &ProbeBase::getName));
 }
 void Debugger::Cmd::probeDesc(std::span<const TclObject> tokens, TclObject& result)
 {
@@ -1080,7 +1087,7 @@ void Debugger::Cmd::symbolsTypes(std::span<const TclObject> tokens, TclObject& r
 void Debugger::Cmd::symbolsLoad(std::span<const TclObject> tokens, TclObject& /*result*/)
 {
 	checkNumArgs(tokens, Between{4, 5}, "filename ?type?");
-	auto filename = std::string(tokens[3].getString());
+	auto filename = tokens[3].getString();
 	auto type = [&]{
 		if (tokens.size() < 5) return SymbolFile::Type::AUTO_DETECT;
 		auto str = tokens[4].getString();
@@ -1136,30 +1143,56 @@ void Debugger::Cmd::symbolsLookup(std::span<const TclObject> tokens, TclObject& 
 	}
 }
 
+// A tiny structural string type, because we're not using C++26 yet that let's you constexpr + std::string
+template<size_t N>
+struct FixedStr {
+	char buf[N]{};
+	constexpr FixedStr() = default;
+	constexpr FixedStr(const char(&str)[N]) { std::copy_n(str, N, buf); }
+	constexpr operator std::string_view() const { return {buf, N - 1}; }
+	// Allows you to use + natively on your constexpr variables!
+	template<size_t M>
+	constexpr auto operator+(FixedStr<M> rhs) const {
+		FixedStr<N + M - 1> out{};
+		std::copy_n(buf, N - 1, out.buf);
+		std::copy_n(rhs.buf, M, out.buf + N - 1);
+		return out;
+	}
+};
+
+// 1. Handles: "literal" + FixedStr
+template<size_t N, size_t M>
+constexpr auto operator+(const char(&lhs)[N], FixedStr<M> rhs) { return FixedStr<N>(lhs) + rhs; }
+
+// 2. Handles: FixedStr + "literal"
+template<size_t N, size_t M>
+constexpr auto operator+(FixedStr<N> lhs, const char(&rhs)[M]) { return lhs + FixedStr<M>(rhs); }
+
 std::string Debugger::Cmd::help(std::span<const TclObject> tokens) const
 {
 	constexpr auto generalHelp =
 		"debug <subcommand> [<arguments>]\n"
 		"  Possible subcommands are:\n"
-		"    list              returns a list of all debuggables\n"
-		"    desc              returns a description of this debuggable\n"
-		"    size              returns the size of this debuggable\n"
-		"    read              read a byte from a debuggable\n"
-		"    write             write a byte to a debuggable\n"
-		"    read_block        read a whole block at once\n"
-		"    write_block       write a whole block at once\n"
-		"    breakpoint        breakpoint related subcommands\n"
-		"    watchpoint        watchpoint related subcommands\n"
-		"    watchexpr         watch expression related subcommands\n"
-		"    condition         debug condition related subcommands\n"
-		"    probe             probe related subcommands\n"
-		"    cont              continue execution after break\n"
-		"    step              execute one instruction\n"
-		"    break             break CPU at current position\n"
-		"    breaked           query CPU breaked status\n"
-		"    disasm            disassemble instructions\n"
-		"    disasm_blob       disassemble a instruction in Tcl binary string\n"
-		"    symbols           manage debug symbols\n"
+		"    list         returns a list of all debuggables\n"
+		"    desc         returns a description of this debuggable\n"
+		"    size         returns the size of this debuggable\n"
+		"    read         read a byte from a debuggable\n"
+		"    write        write a byte to a debuggable\n"
+		"    read_block   read a whole block at once\n"
+		"    write_block  write a whole block at once\n"
+		"    breakpoint   breakpoint related subcommands\n"
+		"    watchpoint   watchpoint related subcommands\n"
+		"    watchexpr    watch expression related subcommands\n"
+		"    condition    debug condition related subcommands\n"
+		"    probe        probe related subcommands\n"
+		"    cont         continue execution after break\n"
+		"    step         execute one instruction\n"
+		"    break        break CPU at current position\n"
+		"    breaked      query CPU breaked status\n"
+		"    disasm       disassemble instructions\n"
+		"    disasm_blob  disassemble a instruction in Tcl binary string\n"
+		"    symbols      manage debug symbols\n"
+		"    trace        trace related subcommands\n"
 		"  The arguments are specific for each subcommand.\n"
 		"  Type 'help debug <subcommand>' for help about a specific subcommand.\n";
 
@@ -1260,10 +1293,12 @@ std::string Debugger::Cmd::help(std::span<const TclObject> tokens) const
 		"  * <key> is the debug condition ID\n"
 		"  * <value> is another Tcl dict containing the properties of the debug condition.\n"
 		"            See 'help debug condition create' for a description of these properties.\n";
+	constexpr FixedStr addressNote = "An address is just a number [0:0xFFFF] but can also be dynamically evaluated from a known symbol by specifying {$sym(MySymbol)}\n";
 	constexpr auto breakPointCreateHelp =
 		"debug breakpoint create [<property-name> <property-value>]...\n"
 		"  Create a new breakpoint with given properties. The following properties are supported:\n"
 		"  -address    the address where the breakpoint should trigger\n"
+		"              " +  addressNote +
 		"  -condition  a Tcl expression that must evaluate to true for the breakpoint to trigger (default = no condition)\n"
 		"  -command    a Tcl command that should be executed when the breakpoint triggers (default = 'debug break')\n"
 		"  -enabled    set to false to (temporarily) disable this breakpoint\n"
@@ -1273,6 +1308,7 @@ std::string Debugger::Cmd::help(std::span<const TclObject> tokens) const
 		"  Create a new watchpoint with given properties. The following properties are supported:\n"
 		"  -type       one of 'read_io', 'write_io', 'read_mem', 'write_mem'\n"
 		"  -address    the address(es) where the watchpoint should trigger, can be a single address or a begin/end-pair\n"
+		"              " + addressNote +
 		"  -condition  a Tcl expression that must evaluate to true for the watchpoint to trigger (default = no condition)\n"
 		"  -command    a Tcl command that should be executed when the watchpoint triggers (default = 'debug break')\n"
 		"  -enabled    set to false to (temporarily) disable this watchpoint\n"
@@ -1453,7 +1489,8 @@ std::string Debugger::Cmd::help(std::span<const TclObject> tokens) const
 		"resulting list can be used to derive the number of bytes in the "
 		"instruction).\n"
 		"  Note that openMSX comes with a 'disasm' Tcl script that is much "
-		"more convenient to use than this subcommand.";
+		"more convenient to use than this subcommand.\n  "
+		+ addressNote + "\n";
 	constexpr auto disasmBlobHelp =
 		"debug disasm_blob <value> <addr> [<function>]\n"
 		"  This is a more generic version of the disasm subcommand, but it "
@@ -1462,7 +1499,8 @@ std::string Debugger::Cmd::help(std::span<const TclObject> tokens) const
 		"address to jump to is necessary. The optional fuction will be "
 		"called with an address as parameter and may return a symbol name "
 		"that replaces that address if a symbol that matches the address "
-		"is found.\n";
+		"is found.\n  "
+		+ addressNote + "\n";
 	constexpr auto symbolsHelp =
 		"debug symbols <subcommand> [<arguments>]\n"
 		"  Possible subcommands are:\n"
@@ -1504,7 +1542,7 @@ std::string Debugger::Cmd::help(std::span<const TclObject> tokens) const
 		} else if (tokens[2] == "list") {
 			return breakPointListHelp;
 		} else if (tokens[2] == "create") {
-			return breakPointCreateHelp;
+			return std::string(breakPointCreateHelp);
 		} else if (tokens[2] == "configure") {
 			return breakPointConfigureHelp;
 		} else if (tokens[2] == "remove") {
@@ -1518,7 +1556,7 @@ std::string Debugger::Cmd::help(std::span<const TclObject> tokens) const
 		} else if (tokens[2] == "list") {
 			return watchPointListHelp;
 		} else if (tokens[2] == "create") {
-			return watchPointCreateHelp;
+			return std::string(watchPointCreateHelp);
 		} else if (tokens[2] == "configure") {
 			return watchPointConfigureHelp;
 		} else if (tokens[2] == "remove") {
@@ -1583,11 +1621,13 @@ std::string Debugger::Cmd::help(std::span<const TclObject> tokens) const
 	} else if (tokens[1] == "breaked") {
 		return breakedHelp;
 	} else if (tokens[1] == "disasm") {
-		return disasmHelp;
+		return std::string(disasmHelp);
 	} else if (tokens[1] == "disasm_blob") {
-		return disasmBlobHelp;
+		return std::string(disasmBlobHelp);
 	} else if (tokens[1] == "symbols") {
 		return symbolsHelp;
+	} else if (tokens[1] == "trace") {
+		return debugger().tracer.help(tokens);
 	} else {
 		return unknownHelp;
 	}
@@ -1631,7 +1671,7 @@ void Debugger::Cmd::tabCompletion(std::vector<std::string>& tokens) const
 	};
 	static constexpr std::array otherCmds = {
 		"disasm"sv, "disasm_blob"sv, "set_bp"sv, "remove_bp"sv, "set_watchpoint"sv,
-		"remove_watchpoint"sv, "set_condition"sv, "remove_condition"sv,
+		"remove_watchpoint"sv, "set_condition"sv, "remove_condition"sv, "trace"sv,
 		"probe"sv, "symbols"sv, "breakpoint"sv, "watchpoint"sv, "watchexpr"sv, "condition"sv,
 	};
 	static constexpr std::array types = {
@@ -1677,6 +1717,8 @@ void Debugger::Cmd::tabCompletion(std::vector<std::string>& tokens) const
 					"files"sv, "lookup"sv,
 				};
 				completeString(tokens, subCmds);
+			} else if (tokens[1] == "trace") {
+				debugger().tracer.tabCompletion(debugger(), tokens);
 			}
 		}
 		break;
@@ -1684,8 +1726,7 @@ void Debugger::Cmd::tabCompletion(std::vector<std::string>& tokens) const
 		if ((size == 4) && (tokens[1] == "probe") &&
 		    (tokens[2] == one_of("desc", "read", "set_bp"))) {
 			completeString(tokens, std::views::transform(
-				debugger().probes,
-				[](auto* p) -> std::string_view { return p->getName(); }));
+				debugger().probes, &ProbeBase::getName));
 		} else if (tokens[1] == "breakpoint") {
 			if ((size == 4) && tokens[2] == one_of("remove"sv, "configure"sv)) {
 				completeString(tokens, getBreakPointIds());
@@ -1730,6 +1771,8 @@ void Debugger::Cmd::tabCompletion(std::vector<std::string>& tokens) const
 				};
 				completeString(tokens, properties);
 			}
+		} else if (tokens[1] == "trace") {
+			debugger().tracer.tabCompletion(debugger(), tokens);
 		}
 		break;
 	}

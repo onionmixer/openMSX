@@ -43,15 +43,12 @@ static constexpr int MidColsCount = 8; // extra spacing between every mid-cols.
 static constexpr auto HighlightColor = IM_COL32(255, 255, 255, 50); // background color of highlighted bytes.
 static constexpr auto HighlightSymbolColor = IM_COL32(148, 95, 35, 255); // background color of known symbol bytes.
 
-DebuggableEditor::DebuggableEditor(ImGuiManager& manager_, std::string debuggableName_, size_t index)
+DebuggableEditor::DebuggableEditor(ImGuiManager& manager_, std::string_view debuggableName_, size_t index)
 	: ImGuiPart(manager_)
 	, symbolManager(manager.getReactor().getSymbolManager())
-	, title(std::move(debuggableName_))
+	, debuggableNameSize(debuggableName_.size())
+	, title(strCat(debuggableName_, strCat_if(index, " (", index + 1, ')')))
 {
-	debuggableNameSize = title.size();
-	if (index) {
-		strAppend(title, " (", index + 1, ')');
-	}
 }
 
 void DebuggableEditor::save(ImGuiTextBuffer& buf)
@@ -135,6 +132,11 @@ void DebuggableEditor::paint(MSXMotherBoard* motherBoard)
 		}
 		drawContents(s, *debuggable, memSize);
 	});
+}
+
+[[nodiscard]] static char formatAsciiData(uint8_t val)
+{
+	return (val < 32 || val >= 128) ? '.' : char(val);
 }
 
 void DebuggableEditor::drawExport(const Sizes& s, Debuggable& debuggable)
@@ -246,7 +248,9 @@ void DebuggableEditor::drawExport(const Sizes& s, Debuggable& debuggable)
 				ImGui::RadioButton("Hex", &exportFormat, FORMAT_HEX);
 				HelpMarker("2 digit hexadecimal\n"
 					"corresponding to custom format '0x%02X'");
-
+				ImGui::SameLine();
+				ImGui::RadioButton("ASCII", &exportFormat, FORMAT_ASCII);
+				HelpMarker("As visible in the ASCII view.");
 				try {
 					if (exportFormatted == EXPORT_FORMATTED) {
 						makeTclList("format", exportCustomFormat, 0).executeCommand(interp);
@@ -298,8 +302,11 @@ void DebuggableEditor::drawExport(const Sizes& s, Debuggable& debuggable)
 				auto fetch = [&](unsigned address) { return debuggable.read(address); };
 				try {
 					auto output = (exportFormatted == EXPORT_FORMATTED)
-						? formatToString(fetch, *begin, *end, exportPrefix, exportColumns, exportSuffix,
-								formatStr, interp)
+						? ((exportFormat == FORMAT_ASCII)
+							? formatToString(fetch, *begin, *end, exportPrefix, exportColumns, exportSuffix, {},
+								[](uint8_t val) { return std::string(1, formatAsciiData(val)); })
+							: formatToString(fetch, *begin, *end, exportPrefix, exportColumns, exportSuffix, ", ",
+								formatStr, interp))
 						: rawToString(fetch, *begin, *end);
 					if (exportDestination == OUTPUT_CLIPBOARD) {
 						manager.getReactor().getDisplay().getVideoSystem().setClipboardText(output);
@@ -377,11 +384,6 @@ void DebuggableEditor::drawExport(const Sizes& s, Debuggable& debuggable)
 [[nodiscard]] static std::string formatData(uint8_t val)
 {
 	return strCat(hex_string<2, HexCase::upper>(val));
-}
-
-[[nodiscard]] static char formatAsciiData(uint8_t val)
-{
-	return (val < 32 || val >= 128) ? '.' : char(val);
 }
 
 [[nodiscard]] std::string DebuggableEditor::formatAddr(const Sizes& s, unsigned addr) const
@@ -810,7 +812,7 @@ void DebuggableEditor::drawContents(const Sizes& s, Debuggable& debuggable, unsi
 		ImGui::Checkbox("Show Address bar", &showAddress);
 		ImGui::Checkbox("Show Search pane", &showSearch);
 		ImGui::Checkbox("Show Data Preview", &showDataPreview);
-		ImGui::Checkbox("Show Ascii", &showAscii);
+		ImGui::Checkbox("Show ASCII", &showAscii);
 		ImGui::Checkbox("Show Symbol info", &showSymbolInfo);
 		ImGui::Checkbox("Grey out zeroes", &greyOutZeroes);
 		im::Menu("Highlight changes", [&]{
@@ -975,8 +977,8 @@ void DebuggableEditor::drawSearch(const Sizes& s, Debuggable& debuggable, unsign
 	ImGui::AlignTextToFramePadding();
 	ImGui::TextUnformatted("Type");
 	ImGui::SameLine();
-	ImGui::SetNextItemWidth(ImGui::CalcTextSize("Ascii").x + extra);
-	if (ImGui::Combo("##search_type", &searchType, "Hex\0Ascii\0\0")) {
+	ImGui::SetNextItemWidth(ImGui::CalcTextSize("ASCII").x + extra);
+	if (ImGui::Combo("##search_type", &searchType, "Hex\0ASCII\0\0")) {
 		parseSearchString(searchString);
 	}
 

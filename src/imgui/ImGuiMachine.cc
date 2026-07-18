@@ -112,7 +112,7 @@ ImGuiMachine::ImGuiMachine(ImGuiManager& manager_)
 	setupFileList.displayName = [&](const FileListWidget::Entry& entry) {
 		auto defaultDisplayName = entry.getDefaultDisplayName();
 		bool isDefault = manager.getReactor().getDefaultSetupSetting().getString() == defaultDisplayName;
-		return strCat(defaultDisplayName, isDefault ? " [default]"sv : ""sv);
+		return strCat(defaultDisplayName, strCat_if(isDefault, " [default]"sv));
 	};
 
 	setupFileList.deleteAction = [&](const FileListWidget::Entry& entry) {
@@ -164,7 +164,7 @@ void ImGuiMachine::showMenu(MSXMotherBoard* motherBoard)
 			};
 
 			auto depthNodeNameForCombo = [&](SetupDepth depth) {
-				return tmpStrCat(depth == one_of(NONE, MACHINE) ? ""sv : "+ "sv, depthNodeNames[depth]);
+				return tmpStrCat(strCat_if(depth != one_of(NONE, MACHINE), "+ "sv), depthNodeNames[depth]);
 			};
 
 			SetupDepth selectedDepth = currentDepth;
@@ -720,7 +720,7 @@ void ImGuiMachine::showSetupOverviewMedia(MSXMotherBoard& motherBoard, Mode mode
 
 void ImGuiMachine::showSetupOverviewState(MSXMotherBoard& motherBoard, ImGuiTreeNodeFlags flags)
 {
-	if (auto time = (motherBoard.getCurrentTime() - EmuTime::zero()).toDouble(); time > 0) {
+	if (auto time = motherBoard.getCurrentTime().toDouble(); time > 0.0) {
 		// this is only useful if the time is not 0
 		im::TreeNode(depthNodeNames[SetupDepth::COMPLETE_STATE].c_str(), flags, [&]{
 			ImGui::StrCat("Machine time: ", formatTime(time));
@@ -766,7 +766,7 @@ void ImGuiMachine::paintSelectMachine(const MSXMotherBoard* motherBoard)
 							if (board) {
 								auto configName = board->getMachineName();
 								const auto* info = findMachineInfo(configName);
-								auto time = (board->getCurrentTime() - EmuTime::zero()).toDouble();
+								auto time = board->getCurrentTime().toDouble();
 								return strCat(info ? info->displayName : configName, " (", formatTime(time), ')');
 							} else {
 								return std::string(name);
@@ -840,12 +840,13 @@ void ImGuiMachine::paintSelectMachine(const MSXMotherBoard* motherBoard)
 
 		ImGui::TextUnformatted("Available machines:"sv);
 		auto& allMachines = getAllMachines();
-		std::string filterDisplay = "filter";
-		if (!filterType.empty() || !filterRegion.empty() || !filterString.empty()) strAppend(filterDisplay, ':');
-		if (!filterType.empty()) strAppend(filterDisplay, ' ', filterType);
-		if (!filterRegion.empty()) strAppend(filterDisplay, ' ', filterRegion);
-		if (!filterString.empty()) strAppend(filterDisplay, ' ', filterString);
-		strAppend(filterDisplay, "###filter");
+		auto filterDisplay = tmpStrCat(
+			"filter",
+			strCat_if(!filterType.empty() || !filterRegion.empty() || !filterString.empty(), ':'),
+			strCat_if(!filterType.empty(), ' ', filterType),
+			strCat_if(!filterRegion.empty(), ' ', filterRegion),
+			strCat_if(!filterString.empty(), ' ', filterString),
+			"###filter");
 		im::TreeNode(filterDisplay.c_str(), ImGuiTreeNodeFlags_DefaultOpen, [&]{
 			displayFilterCombo(filterType, "Type", allMachines);
 			displayFilterCombo(filterRegion, "Region", allMachines);
@@ -1101,16 +1102,26 @@ const std::string& ImGuiMachine::getTestResult(MachineInfo& info)
 		info.testResult.emplace(); // empty string (for now)
 
 		auto& reactor = manager.getReactor();
-		manager.executeDelayed([&reactor, &info]() mutable {
+		std::string configName = info.configName;
+		manager.executeDelayed([&reactor, configName, this]() mutable {
 			// don't create extra mb while drawing
 			try {
+				auto* currentInfo = findMachineInfo(configName);
+				if (!currentInfo) return;
+
 				MSXMotherBoard mb(reactor);
 				mb.getMSXCliComm().setSuppressMessages(true);
-				mb.loadMachine(info.configName);
-				assert(info.testResult->empty());
-				amendConfigInfo(mb, info);
-			} catch (MSXException& e) {
-				info.testResult = e.getMessage(); // error
+				mb.loadMachine(configName);
+				//assert(currentInfo->testResult->empty());
+				amendConfigInfo(mb, *currentInfo);
+			} catch (const MSXException& e) {
+				if (auto* currentInfo = findMachineInfo(configName)) {
+					currentInfo->testResult = e.getMessage(); // error
+				}
+			} catch (const std::exception& e) {
+				if (auto* currentInfo = findMachineInfo(configName)) {
+					currentInfo->testResult = strCat("std::exception: ", e.what()); // error
+				}
 			}
 		});
 	}

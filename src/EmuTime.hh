@@ -18,24 +18,33 @@ public:
 
 	// Note: default copy constructor and assignment operator are ok.
 
-	static constexpr EmuTime makeEmuTime(uint64_t u) { return EmuTime(u); }
+	[[nodiscard]] static constexpr EmuTime fromDouble(double d) {
+		return EmuTime::zero() + EmuDuration::sec(d);
+	}
+	[[nodiscard]] static constexpr EmuTime fromUint64(uint64_t t) {
+		return EmuTime(t);
+	}
+
+	[[nodiscard]] constexpr uint64_t toUint64() const { return time; }
+	[[nodiscard]] constexpr double toDouble() const { return EmuDuration(time).toDouble(); }
 
 	// comparison operators
 	[[nodiscard]] constexpr auto operator<=>(const EmuTime&) const = default;
 
 	// arithmetic operators
-	// TODO these 2 should be 'friend', workaround for pre-gcc-13 bug
-	[[nodiscard]] constexpr EmuTime operator+(const EmuDuration& r) const
-		{ return EmuTime(time + r.time); }
-	[[nodiscard]] constexpr EmuTime operator-(const EmuDuration& r) const
-		{ assert(time >= r.time);
-		  return EmuTime(time - r.time); }
+	[[nodiscard]] constexpr friend EmuTime operator+(EmuTime l, EmuDuration r)
+		{ return EmuTime(l.toUint64() + r.toUint64()); }
+	[[nodiscard]] constexpr friend EmuTime operator-(EmuTime l, EmuDuration r)
+		{ assert(l.toUint64() >= r.toUint64());
+		  return EmuTime(l.toUint64() - r.toUint64()); }
+	[[nodiscard]] constexpr EmuTime saturateSubtract(EmuDuration r) const
+		{ return EmuTime((time >= r.time) ? time - r.time : 0); }
 	constexpr EmuTime& operator+=(EmuDuration d)
 		{ time += d.time; return *this; }
 	constexpr EmuTime& operator-=(EmuDuration d)
 		{ assert(time >= d.time);
 		  time -= d.time; return *this; }
-	[[nodiscard]] constexpr friend EmuDuration operator-(const EmuTime& l, const EmuTime& r)
+	[[nodiscard]] constexpr friend EmuDuration operator-(EmuTime l, EmuTime r)
 		{ assert(l.time >= r.time);
 		  return EmuDuration(l.time - r.time); }
 

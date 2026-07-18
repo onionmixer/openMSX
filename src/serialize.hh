@@ -676,6 +676,7 @@ public:
 		save(c);
 	}
 	void save(const std::string& s) { save(std::string_view(s)); }
+	void save(zstring_view s) { save(std::string_view(s)); }
 	void save(std::string_view s);
 	void serialize_blob(const char* tag, std::span<const uint8_t> data,
 	                    bool diff = true);
@@ -920,7 +921,7 @@ private:
 class XmlInputArchive final : public InputArchiveBase<XmlInputArchive>
 {
 public:
-	explicit XmlInputArchive(const std::string& filename);
+	explicit XmlInputArchive(zstring_view filename);
 
 	[[nodiscard]] bool versionAtLeast(unsigned actual, unsigned required) const
 	{

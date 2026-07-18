@@ -140,8 +140,8 @@ public:
 
 	/** Set the duration of a clock tick. See also setFreq(). */
 	void setPeriod(EmuDuration period) {
-		assert(period.length() < (1ULL << 32));
-		divMod.setDivisor(uint32_t(period.length()));
+		assert(period.toUint64() < (1ULL << 32));
+		divMod.setDivisor(uint32_t(period.toUint64()));
 	}
 
 	/** Reset the clock to start ticking at the given time.
@@ -168,9 +168,8 @@ public:
 	/** Calculate the time at which this clock will have ticked the given
 	  * number of times (counted from its last tick).
 	  */
-	// TODO should be friend, workaround for pre-gcc-13 bug
-	[[nodiscard]] EmuTime operator+(uint64_t n) const {
-		return EmuTime(lastTick.time + n * getStep());
+	[[nodiscard]] friend EmuTime operator+(const DynamicClock& c, uint64_t n) {
+		return EmuTime::fromUint64(c.lastTick.toUint64() + n * c.getStep());
 	}
 
 	/** Advance this clock by the given number of ticks.

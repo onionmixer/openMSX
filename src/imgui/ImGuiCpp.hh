@@ -487,11 +487,11 @@ inline bool PopupContextWindow(const char* str_id, ImGuiPopupFlags popup_flags, 
 }
 inline bool PopupContextWindow(const char* str_id, std::invocable<> auto next)
 {
-	return PopupContextWindow(str_id, 1, next);
+	return PopupContextWindow(str_id, ImGuiPopupFlags_None, next);
 }
 inline bool PopupContextWindow(std::invocable<> auto next)
 {
-	return PopupContextWindow(nullptr, 1, next);
+	return PopupContextWindow(nullptr, ImGuiPopupFlags_None, next);
 }
 
 // im::Table(): wrapper around ImGui::BeginTable() / ImGui::EndTable()
@@ -605,10 +605,10 @@ inline void ListClipper(size_t count, std::invocable<int> auto next)
 }
 
 // im::ListClipperID: combination of im::ListClipper() and im::ID()
-inline void ListClipperID(size_t count, std::invocable<int> auto next)
+inline void ListClipperID(size_t count, float items_height, std::invocable<int> auto next)
 {
 	ImGuiListClipper clipper; // only draw the actually visible lines
-	clipper.Begin(narrow<int>(count));
+	clipper.Begin(narrow<int>(count), items_height);
 	while (clipper.Step()) {
 		for (int i : xrange(clipper.DisplayStart, clipper.DisplayEnd)) {
 			ImGui::PushID(i);
@@ -616,6 +616,10 @@ inline void ListClipperID(size_t count, std::invocable<int> auto next)
 			ImGui::PopID();
 		}
 	}
+}
+inline void ListClipperID(size_t count, std::invocable<int> auto next)
+{
+	ListClipperID(count, -1.0f, next);
 }
 
 } // namespace im

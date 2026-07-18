@@ -151,7 +151,7 @@ static std::string formatSlot(std::optional<uint8_t> slot, MSXMotherBoard* mothe
 	                                       : strCat(ps);
 }
 
-static void checkSort(const SymbolManager& manager, std::vector<SymbolRef>& symbols)
+void ImGuiSymbols::checkSort()
 {
 	auto* sortSpecs = ImGui::TableGetSortSpecs();
 	if (!sortSpecs->SpecsDirty) return;
@@ -161,21 +161,24 @@ static void checkSort(const SymbolManager& manager, std::vector<SymbolRef>& symb
 	assert(sortSpecs->Specs);
 	assert(sortSpecs->Specs->SortOrder == 0);
 
+	sortState.columnIndex = sortSpecs->Specs[0].ColumnIndex;
+	sortState.direction = sortSpecs->Specs[0].SortDirection;
+
 	switch (sortSpecs->Specs->ColumnIndex) {
 	case 0: // name
-		sortUpDown_String(symbols, sortSpecs, [&](const auto& sym) { return sym.name(manager); });
+		sortUpDown_String(symbols, sortSpecs, [&](const auto& sym) { return sym.name(symbolManager); });
 		break;
 	case 1: // value
-		sortUpDown_T(symbols, sortSpecs, [&](const auto& sym) { return sym.value(manager); });
+		sortUpDown_T(symbols, sortSpecs, [&](const auto& sym) { return sym.value(symbolManager); });
 		break;
 	case 2: // slot
-		sortUpDown_String(symbols, sortSpecs, [&](const auto& sym) { return formatSlot(sym.slot(manager)); });
+		sortUpDown_String(symbols, sortSpecs, [&](const auto& sym) { return formatSlot(sym.slot(symbolManager)); });
 		break;
 	case 3: // segment
-		sortUpDown_T(symbols, sortSpecs, [&](const auto& sym) { return sym.segment(manager); });
+		sortUpDown_T(symbols, sortSpecs, [&](const auto& sym) { return sym.segment(symbolManager); });
 		break;
 	case 4: // file (all symbols)
-		sortUpDown_String(symbols, sortSpecs, [&](const auto& sym) { return sym.file(manager); });
+		sortUpDown_String(symbols, sortSpecs, [&](const auto& sym) { return sym.file(symbolManager); });
 		break;
 	default:
 		UNREACHABLE;
@@ -193,17 +196,31 @@ void ImGuiSymbols::drawContext(MSXMotherBoard* motherBoard, const SymbolRef& sym
 		newBp.setAddress(interp, TclObject(strCat("$sym(", sym.name(symbolManager), ')')));
 
 		if (auto slot = sym.slot(symbolManager)) {
-			auto cond = strCat("[pc_in_slot ", *slot & 3, ' ', (*slot >> 2) & 3);
-			if (auto segment = sym.segment(symbolManager)) {
-				strAppend(cond, ' ', *segment);
-			}
-			strAppend(cond, ']');
+			auto segment = sym.segment(symbolManager);
+			auto cond = tmpStrCat(
+				"[pc_in_slot ", *slot & 3, ' ', (*slot >> 2) & 3,
+				strCat_if(segment, ' ', STRCAT_LAZY(*segment)),
+				']');
 			newBp.setCondition(TclObject(cond));
 		}
 
 		auto& cpuInterface = motherBoard->getCPUInterface();
 		cpuInterface.insertBreakPoint(std::move(newBp));
 	}
+
+	ImGui::Separator();
+
+	auto cmdResult = manager.execute(makeTclList("symboltracer", "list", sym.name(symbolManager)));
+	bool traceAsFunction = cmdResult && !cmdResult->getString().empty();
+
+	if (ImGui::Checkbox("Toggle trace function", &traceAsFunction)) {
+		TclObject cmd = makeTclList("symboltracer", traceAsFunction ? "add" : "remove", sym.name(symbolManager));
+		if (traceAsFunction) {
+			cmd.addListElement(sym.value(symbolManager));
+		}
+		manager.execute(cmd);
+	}
+	HelpMarker("Use the console command \"help symboltracer\" for more details on how function traces work.");
 }
 
 template<bool FILTER_FILE>
@@ -230,12 +247,29 @@ void ImGuiSymbols::drawTable(MSXMotherBoard* motherBoard, const std::string& fil
 		if (!FILTER_FILE) {
 			ImGui::TableSetupColumn("file");
 		}
-		ImGui::TableHeadersRow();
-		checkSort(symbolManager, symbols);
 
-		im::ListClipperID(symbols.size(), [&](int i) {
+		// Apply the global sort state to this table's visual indicators
+		if (sortState.columnIndex >= 0) {
+			ImGui::TableSetColumnSortDirection(
+				sortState.columnIndex,
+				sortState.direction,
+				false); // don't append, replace existing sort
+			ImGui::TableGetSortSpecs()->SpecsDirty = false; // prevent re-processing this same frame
+		}
+
+		ImGui::TableHeadersRow();
+		checkSort();
+
+		static std::vector<int> indices; // static to resuse capacity
+		indices.clear();
+		for (auto i : xrange(symbols.size())) {
 			const auto& sym = symbols[i];
-			if (FILTER_FILE && (sym.file(symbolManager) != file)) return;
+			if (!FILTER_FILE || (sym.file(symbolManager) == file)) {
+				indices.push_back(narrow<int>(i));
+			}
+		}
+		im::ListClipperID(indices.size(), [&](int i) {
+			const auto& sym = symbols[indices[i]];
 
 			if (ImGui::TableNextColumn()) { // name
 				const auto& symName = sym.name(symbolManager);

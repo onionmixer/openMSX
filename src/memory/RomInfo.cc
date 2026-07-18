@@ -79,7 +79,9 @@ static constexpr auto romTypeInfoArray = [] {
 	r[KONAMI_ULTIMATE_COLLECTION]={0x2000,"KonamiUltimateCollection","Konami Ultimate Collection"};
 	r[NEO8]            = {0x2000, "NEO-8",           "NEO-8 mapper"};
 	r[NEO16]           = {0x4000, "NEO-16",          "NEO-16 mapper"};
-	r[WONDERKID]       = {0x4000, "WonderKid",       "Wonder Kid mapper"};
+	r[WONDERKID]       = {0x4000, "WonderKid",       "Wonder Kid"};
+	r[KOREAN128IN1]    = {0x2000, "Korean128in1",    "Korean 128 in 1"};
+	r[NAMCO]           = {0,      "Namco",           "Namco 16kB"};
 
 	// ROM mapper types used for system ROMs in machines
 	r[PANASONIC]       = {0x2000, "Panasonic",       "Panasonic internal mapper"};
@@ -114,6 +116,17 @@ static constexpr auto romTypeInfoArray = [] {
 const array_with_enum_index<RomType, RomInfo::RomTypeInfo>& RomInfo::getRomTypeInfo()
 {
 	return romTypeInfoArray;
+}
+
+constexpr auto sortedRomTypes = []{ // sorted on description
+	std::array<RomType, std::size(romTypeInfoArray)> result = {};
+	std::ranges::generate(result, [i = 0]() mutable { return RomType(i++); });
+	std::ranges::sort(result, {}, [](auto i) { return romTypeInfoArray[i].description; });
+	return result;
+}();
+const std::array<RomType, size_t(RomType::NUM)>& RomInfo::getSortedRomTypes()
+{
+	return sortedRomTypes;
 }
 
 struct RomTypeAndName {
@@ -191,6 +204,7 @@ RomType RomInfo::nameToRomType(std::string_view name)
 
 zstring_view RomInfo::romTypeToName(RomType type)
 {
+	if (type == RomType::UNKNOWN) return "unknown";
 	return romTypeInfoArray[type].name;
 }
 

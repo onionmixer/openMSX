@@ -56,7 +56,7 @@ HD::HD(const DeviceConfig& config)
 		filename = Filename(std::move(cliImage), userFileContext());
 	}
 
-	file = File(filename, mode);
+	file = File(filename.getResolved(), mode);
 	filesize = file.getSize();
 	if (mode == File::OpenMode::CREATE && filesize == 0) {
 		// OK, the file was just newly created. Now make sure the file
@@ -104,7 +104,7 @@ void HD::setMedia(const TclObject& info, EmuTime /*time*/)
 
 void HD::switchImage(const Filename& newFilename)
 {
-	file = File(newFilename);
+	file = File(newFilename.getResolved());
 	filename = newFilename;
 	filesize = file.getSize();
 	tigerTree.emplace(*this, filesize, filename.getResolved());
@@ -142,7 +142,7 @@ Sha1Sum HD::getSha1SumImpl(FilePool& filePool)
 	if (hasPatches()) {
 		return SectorAccessibleDisk::getSha1SumImpl(filePool);
 	}
-	return filePool.getSha1Sum(file);
+	return filePool.getSha1Sum(file, filename.getResolved());
 }
 
 void HD::showProgress(size_t position, size_t maxPosition)
@@ -275,17 +275,11 @@ void HD::serialize(Archive& ar, unsigned version)
 		} else {
 			// use sha1
 			auto& filePool = motherBoard.getReactor().getFilePool();
-			Sha1Sum oldChecksum;
+			Sha1Sum oldChecksum{Sha1Sum::UninitializedTag{}};
 			if constexpr (!Archive::IS_LOADER) {
 				oldChecksum = getSha1Sum(filePool);
 			}
-			std::string oldChecksumStr = oldChecksum.empty()
-					      ? std::string{}
-					      : oldChecksum.toString();
-			ar.serialize("checksum", oldChecksumStr);
-			oldChecksum = oldChecksumStr.empty()
-				    ? Sha1Sum()
-				    : Sha1Sum(oldChecksumStr);
+			ar.serialize("checksum", oldChecksum);
 
 			if constexpr (Archive::IS_LOADER) {
 				Sha1Sum newChecksum = getSha1Sum(filePool);

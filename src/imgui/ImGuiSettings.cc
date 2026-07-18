@@ -28,6 +28,8 @@
 #include "MSXJoystick.hh"
 #include "MSXMotherBoard.hh"
 #include "Mixer.hh"
+#include "Plotter.hh"
+#include "PluggingController.hh"
 #include "ProxySetting.hh"
 #include "R800.hh"
 #include "Reactor.hh"
@@ -125,6 +127,7 @@ void ImGuiSettings::setStyle() const
 	case 0: ImGui::StyleColorsDark();    break;
 	case 1: ImGui::StyleColorsLight();   break;
 	case 2: ImGui::StyleColorsClassic(); break;
+	case 3: ImGui::StyleColorsClassic(); break; // colorblind adjustments
 	}
 	setColors(selectedStyle);
 }
@@ -361,7 +364,7 @@ void ImGuiSettings::showMenu(MSXMotherBoard* motherBoard)
 			ImGui::Separator();
 			im::Menu("Select style", [&]{
 				std::optional<int> newStyle;
-				static constexpr std::array names = {"Dark", "Light", "Classic"}; // must be in sync with setStyle()
+				static constexpr std::array names = {"Dark", "Light", "Classic", "Colorblind"}; // must be in sync with setStyle()
 				for (auto i : xrange(narrow<int>(names.size()))) {
 					if (ImGui::Selectable(names[i], selectedStyle == i)) {
 						newStyle = i;
@@ -383,6 +386,40 @@ void ImGuiSettings::showMenu(MSXMotherBoard* motherBoard)
 				});
 			});
 			ImGui::MenuItem("Configure messages", nullptr, &manager.messages->configureWindow.open);
+		});
+		im::Menu("MSX Plotter", motherBoard != nullptr, [&]{
+			// Find the MSXPlotter in the pluggables
+			MSXPlotter* plotter = nullptr;
+			for (const auto& plug : motherBoard->getPluggingController().getPluggables()) {
+				if (auto* p = dynamic_cast<MSXPlotter*>(plug.get())) {
+					plotter = p;
+					break;
+				}
+			}
+
+			// Character Set dropdown
+			static constexpr std::array charSetNames = { // must be in sync with Plotter
+				"International", "Japanese", "DIN (German)"
+			};
+			auto currentCharSet = int(plotter->getCharacterSet());
+			if (ImGui::Combo("Character set", &currentCharSet, charSetNames.data(), int(charSetNames.size()))) {
+				plotter->setCharacterSet(static_cast<MSXPlotter::CharacterSet>(currentCharSet));
+			}
+
+			// Dipswitch 4
+			bool dipSwitch4 = plotter->getDipSwitch4();
+			if (ImGui::Checkbox("Dipswitch 4", &dipSwitch4)) {
+				plotter->setDipSwitch4(dipSwitch4);
+			}
+
+			// Pen thickness
+			static constexpr std::array thicknessNames = {
+				"Standard (PRK-C41)", "Thick (PRK-C42)"
+			};
+			auto currentThickness = int(plotter->getPenThicknessSetting().getEnum());
+			if (ImGui::Combo("Pen thickness", &currentThickness, thicknessNames.data(), int(thicknessNames.size()))) {
+				plotter->getPenThicknessSetting().setEnum(static_cast<MSXPlotter::PenThickness>(currentThickness));
+			}
 		});
 		ImGui::Separator();
 		im::Menu("Advanced", [&]{
@@ -531,7 +568,7 @@ static void drawDPad(gl::vec2 center, float size, std::span<const uint8_t, 4> ho
 		if (hovered[i] || (hoveredRow == i)) {
 			drawList->AddConvexPolyFilled(points[i].data(), 5, hoverColor);
 		}
-		drawList->AddPolyline(points[i].data(), 5 + 1, color, 0, thickness);
+		drawList->AddPolyline(points[i].data(), 5 + 1, color, thickness);
 	}
 }
 
@@ -553,7 +590,7 @@ static void drawFilledRectangle(Rectangle r, float corner, bool fill)
 		drawList->AddRectFilled(r.topLeft, r.bottomRight, hoverColor, corner);
 	}
 	auto color = getColor(imColor::TEXT);
-	drawList->AddRect(r.topLeft, r.bottomRight, color, corner, 0, thickness);
+	drawList->AddRect(r.topLeft, r.bottomRight, color, corner, thickness);
 }
 
 static void drawLetterA(gl::vec2 center)
@@ -562,7 +599,7 @@ static void drawLetterA(gl::vec2 center)
 	auto tr = [&](gl::vec2 p) { return center + p; };
 	const std::array<ImVec2, 3> lines = { tr({-6, 7}), tr({0, -7}), tr({6, 7}) };
 	auto color = getColor(imColor::TEXT);
-	drawList->AddPolyline(lines.data(), narrow<int>(lines.size()), color, 0, thickness);
+	drawList->AddPolyline(lines.data(), narrow<int>(lines.size()), color, thickness);
 	drawList->AddLine(tr({-3, 1}), tr({3, 1}), color, thickness);
 }
 static void drawLetterB(gl::vec2 center)
@@ -571,7 +608,7 @@ static void drawLetterB(gl::vec2 center)
 	auto tr = [&](gl::vec2 p) { return center + p; };
 	const std::array<ImVec2, 4> lines = { tr({1, -7}), tr({-4, -7}), tr({-4, 7}), tr({2, 7}) };
 	auto color = getColor(imColor::TEXT);
-	drawList->AddPolyline(lines.data(), narrow<int>(lines.size()), color, 0, thickness);
+	drawList->AddPolyline(lines.data(), narrow<int>(lines.size()), color, thickness);
 	drawList->AddLine(tr({-4, -1}), tr({2, -1}), color, thickness);
 	drawList->AddBezierQuadratic(tr({1, -7}), tr({4, -7}), tr({4, -4}), color, thickness);
 	drawList->AddBezierQuadratic(tr({4, -4}), tr({4, -1}), tr({1, -1}), color, thickness);
@@ -607,7 +644,7 @@ static void drawLetterZ(gl::vec2 center)
 	auto tr = [&](gl::vec2 p) { return center + p; };
 	const std::array<ImVec2, 4> linesZ2 = { tr({-4, -6}), tr({4, -6}), tr({-4, 6}), tr({4, 6}) };
 	auto color = getColor(imColor::TEXT);
-	drawList->AddPolyline(linesZ2.data(), 4, color, 0, thickness);
+	drawList->AddPolyline(linesZ2.data(), 4, color, thickness);
 }
 
 namespace msxjoystick {
@@ -654,7 +691,7 @@ static void draw(gl::vec2 scrnPos, std::span<uint8_t> hovered, int hoveredRow)
 	auto* drawList = ImGui::GetWindowDrawList();
 
 	auto color = getColor(imColor::TEXT);
-	drawList->AddRect(scrnPos, scrnPos + boundingBox, color, corner, 0, thickness);
+	drawList->AddRect(scrnPos, scrnPos + boundingBox, color, corner, thickness);
 
 	drawDPad(scrnPos + centerDPad, sizeDPad, subspan<4>(hovered), hoveredRow);
 

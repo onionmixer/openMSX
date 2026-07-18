@@ -5,6 +5,7 @@
 
 #include "Reactor.hh"
 
+#include "Math.hh"
 #include "StringOp.hh"
 #include "circular_buffer.hh"
 #include "fast_log2.hh"
@@ -157,6 +158,30 @@ void simpleToolTip(std::invocable<> auto descFunc)
 
 void HelpMarker(std::string_view desc, float spacing = -1.0f);
 
+// Generate a distinct color for each given index.
+// Obviously the more colors you request, the less distinct each color pair will be.
+// The initial color (for index=0) can be tuned with the 'h0' and 'v0' parameters.
+[[nodiscard]] inline std::tuple<float, float, float> generateDistinctColor(
+	unsigned index,
+	float h0 = 0.0f, // Hue start offset [0, 1)
+	unsigned v0 = 0) // Brightness phase offset [0, 2]
+{
+	// Hue: low-discrepancy sequence, wrapped to [0, 1)
+	constexpr float phi = 0.6180339887498948482f; // golden ratio conjugate  (sqrt(5) - 1) / 2
+	auto h = Math::fract(h0 + float(index) * phi);
+
+	// Saturation
+	constexpr float s = 0.65f;
+
+	// Value (brightness) levels
+	constexpr std::array v_levels = {0.90f, 0.75f, 0.60f};
+	auto v = v_levels[(index + v0) % v_levels.size()];
+
+	float r, g, b;
+	ImGui::ColorConvertHSVtoRGB(h, s, v, r, g, b);
+	return {r, g, b};
+}
+
 inline bool ButtonWithCustomRendering(
 	const char* label, gl::vec2 size, bool pressed,
 	std::invocable<gl::vec2 /*center*/, ImDrawList*> auto render)
@@ -188,7 +213,7 @@ inline bool ButtonWithCenteredGlyph(ImWchar glyph, gl::vec2 maxGlyphSize)
 
 	return ButtonWithCustomRendering(label.data(), buttonSize, [&](gl::vec2 center, ImDrawList* drawList) {
 		auto* font = ImGui::GetFont();
-		auto texId = font->ContainerAtlas->TexRef;
+		auto texId = font->OwnerAtlas->TexRef;
 		const auto* g = font->GetFontBaked(ImGui::GetFontSize())->FindGlyph(glyph);
 		auto halfSize = gl::vec2{g->X1 - g->X0, g->Y1 - g->Y0} * 0.5f;
 		drawList->AddImage(texId, center - halfSize, center + halfSize, {g->U0, g->V0}, {g->U1, g->V1});
@@ -391,13 +416,16 @@ static void chunk_by(Range&& range, BinaryPred pred, Action action)
 	}
 }
 
-std::string getShortCutForCommand(const HotKey& hotkey, std::string_view command);
+TemporaryString getShortCutForCommand(const HotKey& hotkey, std::string_view command);
 
 std::string getKeyChordName(ImGuiKeyChord keyChord);
 std::optional<ImGuiKeyChord> parseKeyChord(std::string_view name);
 
 [[nodiscard]] std::string formatToString(function_ref<uint8_t(unsigned)> fetch, unsigned begin, unsigned end, std::string_view prefix,
-	unsigned columns, std::string_view suffix, std::string_view formatStr, Interpreter& interp);
+	unsigned columns, std::string_view suffix, std::string_view separator, std::string_view formatStr, Interpreter& interp);
+
+[[nodiscard]] std::string formatToString(function_ref<uint8_t(unsigned)> fetch, unsigned begin, unsigned end, std::string_view prefix,
+	unsigned columns, std::string_view suffix, std::string_view separator, std::function<std::string(uint8_t)> formatFunc);
 
 [[nodiscard]] std::string rawToString(function_ref<uint8_t(unsigned)> fetch, unsigned begin, unsigned end);
 
@@ -432,18 +460,36 @@ private:
 	bool planar = false;
 };
 
-inline std::string freq2note(float freq)
+[[nodiscard]] inline int freq2noteNum(float freq)
 {
 	static constexpr auto a4_freq = 440.0f;
-	static constexpr std::array<std::string_view, 12> names = {
-		"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"
+	return int(std::lround(12.0f * fast_log2(freq / a4_freq))) + 9 + 4 * 12;
+}
+[[nodiscard]] inline std::string_view noteNum2str(int n, std::span<char, 3> buf)
+{
+	using N = std::array<char, 2>;
+	static constexpr std::array<N, 12> names = {
+		N{'C'}, N{'C','#'}, N{'D'}, N{'D','#'}, N{'E'},
+		N{'F'}, N{'F','#'}, N{'G'}, N{'G','#'}, N{'A'}, N{'A','#'}, N{'B'}
 	};
 
-	auto n = int(std::lround(12.0f * fast_log2(freq / a4_freq))) + 9 + 4 * 12;
-	if (n < 0) return ""; // these are below 20Hz, so inaudible
+	if (n < 0) return {}; // these are below 20Hz, so inaudible
 	auto note = n % 12;
 	auto octave = n / 12;
-	return strCat(names[note], octave);
+	const auto& name = names[note];
+	buf[0] = name[0];
+	if (name[1]) {
+		buf[1] = name[1];
+		buf[2] = char(octave + '0');
+		return std::string_view{buf.data(), 3};
+	} else {
+		buf[1] = char(octave + '0');
+		return std::string_view{buf.data(), 2};
+	}
+}
+[[nodiscard]] inline auto freq2note(float freq, std::span<char, 3> buf)
+{
+	return noteNum2str(freq2noteNum(freq), buf);
 }
 
 enum class imColor : uint8_t {

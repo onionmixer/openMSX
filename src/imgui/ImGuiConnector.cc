@@ -27,6 +27,7 @@ namespace openmsx {
 	if (pluggable == "simpl")              return "SIMPL";
 	if (pluggable == "msx-printer")        return "MSX printer";
 	if (pluggable == "epson-printer")      return "Epson printer";
+	if (pluggable == "MSXPlotter")         return "MSX plotter";
 	if (pluggable == "tetris2-protection") return "Tetris II SE dongle";
 	if (pluggable == "circuit-designer-rd-dongle") return "Circuit Designer RD dongle";
 	return pluggable;
@@ -89,7 +90,7 @@ void ImGuiConnector::showPluggables(PluggingController& controller, Mode mode)
 						});
 						break;
 					case SUBMENU:
-						im::Menu(pluggableToGuiString(plugName.empty() ? tmpStrCat("(empty)", "##", connectorName).c_str() : plugName).c_str(), [&] {
+						im::Menu(tmpStrCat(strCat_if(plugName.empty(), "(empty)##", connectorName).else_(STRCAT_LAZY(pluggableToGuiString(plugName)))).c_str(), [&] {
 							paintPluggableSelectables(controller, *connector);
 						});
 						break;

@@ -38,6 +38,7 @@
       </rom>
       <io base="0xD8" num="2" type="O"/>
       <io base="0xD9" num="1" type="I"/>
+      <level_2_via>only_level_1</level_2_via> <!-- checked by kanjitest v2.x on hardware -->
     </Kanji>
 
     <PPI id="ppi">
@@ -90,7 +91,7 @@
     </Matsushita>
 
     <T9769 id="T9769">
-      <subtype>B</subtype>
+      <subtype>B</subtype> <!-- there is also evidence that machines with type A were made -->
     </T9769>
 
     <primary slot="0">

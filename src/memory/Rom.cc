@@ -74,10 +74,7 @@ Rom::Rom(std::string name_, static_string_view description_,
 	}
 	if (errors.empty()) {
 		// No matching <rom> tag.
-		std::string err = "Missing <rom> tag";
-		if (!id.empty()) {
-			strAppend(err, " with id=\"", id, '"');
-		}
+		auto err = strCat("Missing <rom> tag", strCat_if(!id.empty(), " with id=\"", id, '"'));
 		throw ConfigException(std::move(err));
 	} else {
 		// We got at least one matching <rom>, but it failed to load.
@@ -123,7 +120,9 @@ void Rom::init(MSXMotherBoard& motherBoard, XMLElement& config,
 		// first try already resolved filename ..
 		if (resolvedFilenameElem) {
 			try {
-				file = File(std::string(resolvedFilenameElem->getData()));
+				auto fname = resolvedFilenameElem->getData();
+				file = File(fname);
+				filename = fname;
 			} catch (FileException&) {
 				// ignore
 			}
@@ -133,17 +132,21 @@ void Rom::init(MSXMotherBoard& motherBoard, XMLElement& config,
 			? FileType::ROM : FileType::SYSTEM_ROM;
 		if (!file.is_open() && resolvedSha1Elem) {
 			Sha1Sum sha1(resolvedSha1Elem->getData());
-			file = filePool.getFile(fileType, sha1);
+			auto [f, fname] = filePool.getFile(fileType, sha1);
+			file = std::move(f);
 			if (file.is_open()) {
 				// avoid recalculating same sha1 later
 				originalSha1 = sha1;
+				filename = std::move(fname);
 			}
 		}
 		// .. and then try filename as originally given by user ..
 		if (!file.is_open()) {
 			for (const auto& f : filenames) {
 				try {
-					file = File(Filename(f->getData(), context));
+					auto fname = context.resolve(f->getData());
+					file = File(fname);
+					filename = std::move(fname);
 					break;
 				} catch (FileException&) {
 					// ignore
@@ -155,26 +158,27 @@ void Rom::init(MSXMotherBoard& motherBoard, XMLElement& config,
 		if (!file.is_open()) {
 			for (const auto& s : sums) {
 				Sha1Sum sha1(s->getData());
-				file = filePool.getFile(fileType, sha1);
+				auto [f, fname] = filePool.getFile(fileType, sha1);
+				file = std::move(f);
 				if (file.is_open()) {
 					// avoid recalculating same sha1 later
 					originalSha1 = sha1;
+					filename = std::move(fname);
 					break;
 				}
 			}
 		}
 		// .. still no file, then error
 		if (!file.is_open()) {
-			std::string error = strCat("Couldn't find ROM file for \"", name, '"');
-			if (!std::ranges::empty(filenames)) {
-				strAppend(error, ' ', (*std::ranges::begin(filenames))->getData());
-			}
-			if (resolvedSha1Elem) {
-				strAppend(error, " (sha1: ", resolvedSha1Elem->getData(), ')');
-			} else if (!std::ranges::empty(sums)) {
-				strAppend(error, " (sha1: ", (*std::ranges::begin(sums))->getData(), ')');
-			}
-			strAppend(error, '.');
+			auto error = strCat(
+				"Couldn't find ROM file for \"", name, '"',
+				strCat_if(!std::ranges::empty(filenames),
+					' ', STRCAT_LAZY((*std::ranges::begin(filenames))->getData())),
+				strCat_if(resolvedSha1Elem,
+					" (sha1: ", STRCAT_LAZY(resolvedSha1Elem->getData()), ')')
+				.else_if(!std::ranges::empty(sums),
+					" (sha1: ", STRCAT_LAZY((*std::ranges::begin(sums))->getData()), ')'),
+				'.');
 			throw MSXException(std::move(error));
 		}
 
@@ -190,13 +194,13 @@ void Rom::init(MSXMotherBoard& motherBoard, XMLElement& config,
 			mmap = file.mmap<uint8_t>();
 			rom = *mmap;
 		} catch (FileException&) {
-			throw MSXException("Error reading ROM image: ", file.getURL());
+			throw MSXException("Error reading ROM image: ", filename);
 		}
 
 		// For file-based roms, calc sha1 via File::getSha1Sum(). It can
 		// possibly use the FilePool cache to avoid the calculation.
 		if (originalSha1.empty()) {
-			originalSha1 = filePool.getSha1Sum(file);
+			originalSha1 = filePool.getSha1Sum(file, filename);
 		}
 
 		// verify SHA1
@@ -204,7 +208,7 @@ void Rom::init(MSXMotherBoard& motherBoard, XMLElement& config,
 			motherBoard.getMSXCliComm().printWarning(
 				"SHA1 sum for '", name,
 				"' does not match with sum of '",
-				file.getURL(), "'.");
+				filename, "'.");
 		}
 
 		// We loaded an external file, so check.
@@ -268,6 +272,7 @@ void Rom::init(MSXMotherBoard& motherBoard, XMLElement& config,
 		} else {
 			// unknown ROM, use file name
 			name = file.getOriginalName();
+			if (name.empty()) name = filename;
 		}
 	}
 
@@ -284,11 +289,12 @@ void Rom::init(MSXMotherBoard& motherBoard, XMLElement& config,
 
 	if (checkResolvedSha1) {
 		auto& doc = motherBoard.getMachineConfig()->getXMLDocument();
-		auto patchedSha1Str = getSHA1().toString();
+		std::array<char, 40> buf;
+		auto patchedSha1Str = getSHA1().toString(buf);
 		const auto* actualSha1Elem = doc.getOrCreateChild(
 			config, "resolvedSha1", doc.allocateString(patchedSha1Str));
 		if (actualSha1Elem->getData() != patchedSha1Str) {
-			std::string_view tmp = file.is_open() ? file.getURL() : name;
+			const auto& tmp = file.is_open() ? filename : name;
 			// can only happen in case of loadstate
 			motherBoard.getMSXCliComm().printWarning(
 				"The content of the rom ", tmp, " has "
@@ -330,6 +336,7 @@ Rom::Rom(Rom&& r) noexcept
 	: rom          (r.rom)
 	, extendedRom  (std::move(r.extendedRom))
 	, file         (std::move(r.file))
+	, filename     (std::move(r.filename))
 	, mmap         (std::move(r.mmap))
 	, originalSha1 (r.originalSha1)
 	, actualSha1   (r.actualSha1)
@@ -341,11 +348,6 @@ Rom::Rom(Rom&& r) noexcept
 }
 
 Rom::~Rom() = default;
-
-std::string_view Rom::getFilename() const
-{
-	return file.is_open() ? file.getURL() : std::string_view();
-}
 
 const Sha1Sum& Rom::getOriginalSHA1() const
 {
@@ -379,8 +381,10 @@ void Rom::addPadding(size_t newSize, uint8_t filler)
 
 void Rom::getInfo(TclObject& result) const
 {
-	result.addDictKeyValues("actualSHA1", getSHA1().toString(),
-	                        "originalSHA1", getOriginalSHA1().toString(),
+	std::array<char, 40> buf1;
+	std::array<char, 40> buf2;
+	result.addDictKeyValues("actualSHA1", getSHA1().toString(buf1),
+	                        "originalSHA1", getOriginalSHA1().toString(buf2),
 	                        "filename", getFilename());
 }
 

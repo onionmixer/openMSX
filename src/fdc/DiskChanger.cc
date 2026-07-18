@@ -125,7 +125,7 @@ void DiskChanger::sendChangeDiskEvent(std::span<const TclObject> args)
 
 void DiskChanger::signalStateChange(const StateChange& event)
 {
-	const auto* commandEvent = dynamic_cast<const MSXCommandEvent*>(&event);
+	const auto* commandEvent = std::get_if<MSXCommandEvent>(&event);
 	if (!commandEvent) return;
 
 	execute(commandEvent->getTokens());
@@ -291,9 +291,9 @@ bool DiskCommand::needRecord(std::span<const TclObject> tokens) const
 	return tokens.size() > 1;
 }
 
-static std::string calcSha1(SectorAccessibleDisk* disk, FilePool& filePool)
+static Sha1Sum calcSha1(SectorAccessibleDisk* disk, FilePool& filePool)
 {
-	return disk ? disk->getSha1Sum(filePool).toString() : std::string{};
+	return disk ? disk->getSha1Sum(filePool) : Sha1Sum{};
 }
 
 // version 1:  initial version
@@ -322,7 +322,7 @@ void DiskChanger::serialize(Archive& ar, unsigned version)
 	ar.serialize("patches", patches);
 
 	auto& filePool = reactor.getFilePool();
-	std::string oldChecksum;
+	Sha1Sum oldChecksum{Sha1Sum::UninitializedTag{}};
 	if constexpr (!Archive::IS_LOADER) {
 		oldChecksum = calcSha1(getSectorAccessibleDisk(), filePool);
 	}
@@ -340,10 +340,10 @@ void DiskChanger::serialize(Archive& ar, unsigned version)
 			// I'm not sure which alternative is better.
 			if (!FileOperations::exists(name)) {
 				assert(!oldChecksum.empty());
-				auto file = filePool.getFile(
-					FileType::DISK, Sha1Sum(oldChecksum));
+				auto [file, filename] = filePool.getFile(
+					FileType::DISK, oldChecksum);
 				if (file.is_open()) {
-					name = file.getURL();
+					name = std::move(filename);
 				}
 			}
 			std::vector<TclObject> args =
@@ -364,7 +364,7 @@ void DiskChanger::serialize(Archive& ar, unsigned version)
 			}
 		}
 
-		std::string newChecksum = calcSha1(getSectorAccessibleDisk(), filePool);
+		auto newChecksum = calcSha1(getSectorAccessibleDisk(), filePool);
 		if (oldChecksum != newChecksum && scheduler && scheduler->getCurrentTime() != EmuTime::zero()) {
 			controller.getCliComm().printWarning(
 				"The content of the disk image ",

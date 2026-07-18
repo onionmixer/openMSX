@@ -14,18 +14,39 @@
 #include "Schedulable.hh"
 #include "TclObject.hh"
 
+#include "strCat.hh"
 #include "StringOp.hh"
 #include "stl.hh"
 #include "unreachable.hh"
 
 #include <algorithm>
+#include <format>
 #include <iterator>
-#include <memory>
 #include <ranges>
-#include <sstream>
 #include <variant>
 
 namespace openmsx {
+
+class AfterCmd;
+class AfterCommand;
+
+// Helper struct to hold the essential data needed to execute a command,
+// decoupled from the Schedulable machinery. This allows us to extract the
+// command before destroying the Schedulable, avoiding use-after-free when
+// the Scheduler is deleted by the executed command.
+struct DelayedCommand {
+	TclObject command;
+	AfterCommand& afterCommand;
+
+	void execute() {
+		try {
+			command.executeCommand(afterCommand.getInterpreter());
+		} catch (CommandException& e) {
+			afterCommand.getCommandController().getCliComm().printWarning(
+				"Error executing delayed command: ", e.getMessage());
+		}
+	}
+};
 
 class AfterCmd
 {
@@ -33,7 +54,7 @@ public:
 	[[nodiscard]] const auto& getCommand() const { return command; }
 	[[nodiscard]] auto getId() const { return id; }
 	[[nodiscard]] auto getIdStr() const { return tmpStrCat("after#", id); }
-	void execute();
+	[[nodiscard]] DelayedCommand extractCommand();
 protected:
 	AfterCmd(AfterCommand& afterCommand,
 		 TclObject command);
@@ -277,25 +298,20 @@ void AfterCommand::afterIdle(std::span<const TclObject> tokens, TclObject& resul
 
 void AfterCommand::afterInfo(std::span<const TclObject> /*tokens*/, TclObject& result) const
 {
-	auto printTime = [](std::ostream& os, const AfterTimedCmd& cmd) {
-		os.precision(3);
-		os << std::fixed << std::showpoint << cmd.getTime() << ' ';
-	};
-
-	std::ostringstream str;
+	std::string str;
 	for (auto idx : afterCmds) {
 		const auto& var = afterCmdPool[idx];
-		std::visit([&](const AfterCmd& cmd) { str << cmd.getIdStr() << ": "; }, var);
+		std::visit([&](const AfterCmd& cmd) { strAppend(str, cmd.getIdStr(), ": "); }, var);
 		std::visit(overloaded {
-			[&](const AfterTimeCmd&        cmd ) { str << "time "; printTime(str, cmd); },
-			[&](const AfterIdleCmd&        cmd ) { str << "idle "; printTime(str, cmd); },
-			[&](const AfterSimpleEventCmd& cmd ) { str << cmd.getType() << ' '; },
-			[&](const AfterInputEventCmd&  cmd ) { str << toString(cmd.getEvent()) << ' '; },
-			[&](const AfterRealTimeCmd& /*cmd*/) { str << "realtime "; }
+			[&](const AfterTimeCmd&        cmd ) { str += std::format("time {:.3f} ", cmd.getTime()); },
+			[&](const AfterIdleCmd&        cmd ) { str += std::format("idle {:.3f} ", cmd.getTime()); },
+			[&](const AfterSimpleEventCmd& cmd ) { strAppend(str, cmd.getType(), ' '); },
+			[&](const AfterInputEventCmd&  cmd ) { strAppend(str, toString(cmd.getEvent()), ' '); },
+			[&](const AfterRealTimeCmd& /*cmd*/) { str += "realtime "; }
 		}, var);
-		std::visit([&](const AfterCmd& cmd) { str << cmd.getCommand().getString() << '\n'; }, var);
+		std::visit([&](const AfterCmd& cmd) { strAppend(str, cmd.getCommand().getString(), '\n'); }, var);
 	}
-	result = str.str();
+	result = str;
 }
 
 void AfterCommand::afterCancel(std::span<const TclObject> tokens, TclObject& /*result*/)
@@ -379,9 +395,10 @@ void AfterCommand::executeMatches(std::predicate<Index> auto pred)
 	auto p = partition_copy_remove(afterCmds, std::back_inserter(matches), pred);
 	afterCmds.erase(p.second, end(afterCmds));
 	for (auto idx : matches) {
-		std::visit([](AfterCmd& cmd) { cmd.execute(); },
-		           afterCmdPool[idx]);
+		auto delayed = std::visit([](AfterCmd& cmd) { return cmd.extractCommand(); },
+		                          afterCmdPool[idx]);
 		afterCmdPool.remove(idx);
+		delayed.execute();
 	}
 	matches.clear(); // for next call (but keep capacity)
 }
@@ -457,14 +474,9 @@ AfterCmd::AfterCmd(AfterCommand& afterCommand_, TclObject command_)
 {
 }
 
-void AfterCmd::execute()
+DelayedCommand AfterCmd::extractCommand()
 {
-	try {
-		command.executeCommand(afterCommand.getInterpreter());
-	} catch (CommandException& e) {
-		afterCommand.getCommandController().getCliComm().printWarning(
-			"Error executing delayed command: ", e.getMessage());
-	}
+	return DelayedCommand{.command = std::move(command), .afterCommand = afterCommand};
 }
 
 AfterCommand::Index AfterCmd::removeSelf()
@@ -591,8 +603,9 @@ void AfterRealTimeCmd::executeRT()
 	// this method. Otherwise execute could execute 'after cancel ..' and
 	// removeSelf() asserts that it can't find itself anymore.
 	auto idx = removeSelf();
-	execute();
+	auto delayed = extractCommand();
 	afterCmdPool.remove(idx);
+	delayed.execute();
 }
 
 } // namespace openmsx

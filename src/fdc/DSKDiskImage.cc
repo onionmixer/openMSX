@@ -1,13 +1,14 @@
 #include "DSKDiskImage.hh"
 
 #include "File.hh"
+#include "Filename.hh"
 #include "FilePool.hh"
 
 namespace openmsx {
 
 DSKDiskImage::DSKDiskImage(const Filename& fileName)
 	: SectorBasedDisk(DiskName(fileName))
-	, file(std::make_shared<File>(fileName, File::OpenMode::PRE_CACHE))
+	, file(std::make_shared<File>(fileName.getResolved(), File::OpenMode::PRE_CACHE))
 {
 	setNbSectors(file->getSize() / sizeof(SectorBuffer));
 }
@@ -43,7 +44,7 @@ Sha1Sum DSKDiskImage::getSha1SumImpl(FilePool& filePool)
 	if (hasPatches()) {
 		return SectorAccessibleDisk::getSha1SumImpl(filePool);
 	}
-	return filePool.getSha1Sum(*file);
+	return filePool.getSha1Sum(*file, getName().getResolved());
 }
 
 } // namespace openmsx

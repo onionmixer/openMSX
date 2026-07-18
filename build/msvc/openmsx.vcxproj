@@ -395,6 +395,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\debugger\ProbeBreakPoint.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\debugger\SimpleDebuggable.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\debugger\SymbolManager.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\debugger\Tracer.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\events\AdhocCliCommParser.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\events\AfterCommand.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\events\BooleanInput.cc" />
@@ -514,6 +515,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiOsdIcons.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiPalette.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiPlot.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiPlotterViewer.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiRasterViewer.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiReverseBar.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiSettings.cc" />
@@ -521,6 +523,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiSpriteViewer.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiSymbols.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiTools.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiTraceViewer.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiTrainer.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiSCCViewer.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiVdpRegs.cc" />
@@ -606,6 +609,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomKonami.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomKonamiKeyboardMaster.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomKonamiSCC.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\memory\RomKorean128in1.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomMajutsushi.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomManbow2.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomMSXtra.cc" />
@@ -615,6 +619,7 @@
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomMatraCompilation.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomMatraInk.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomMSXDOS2.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\memory\RomNamco.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomNational.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomNeo8.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomNeo16.cc" />
@@ -865,6 +870,11 @@
     <ClCompile Include="$(OpenMSXSrcDir)\PluggableFactory.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\PluggingController.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\Printer.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\Paper.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\Plotter.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\PlotterFont.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\PlotterPaper.cc" />
+    <ClCompile Include="$(OpenMSXSrcDir)\MSXCharacterSets.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\PrinterPortDevice.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\PrinterPortLogger.cc" />
     <ClCompile Include="$(OpenMSXSrcDir)\PrinterPortSimpl.cc" />
@@ -978,6 +988,7 @@
     <None Include="$(OpenMSXSrcDir)\debugger\ProbeBreakPoint.hh" />
     <None Include="$(OpenMSXSrcDir)\debugger\SimpleDebuggable.hh" />
     <None Include="$(OpenMSXSrcDir)\debugger\SymbolManager.hh" />
+    <None Include="$(OpenMSXSrcDir)\debugger\Tracer.hh" />
     <None Include="$(OpenMSXSrcDir)\events\AdhocCliCommParser.hh" />
     <None Include="$(OpenMSXSrcDir)\events\AfterCommand.hh" />
     <None Include="$(OpenMSXSrcDir)\events\BooleanInput.hh" />
@@ -1114,6 +1125,7 @@
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiSpriteViewer.hh" />
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiSymbols.hh" />
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiTools.hh" />
+    <None Include="$(OpenMSXSrcDir)\imgui\ImGuiTraceViewer.hh" />
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiTrainer.hh" />
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiSCCViewer.hh" />
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiVdpRegs.hh" />
@@ -1201,6 +1213,7 @@
     <None Include="$(OpenMSXSrcDir)\memory\RomKonami.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomKonamiKeyboardMaster.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomKonamiSCC.hh" />
+    <None Include="$(OpenMSXSrcDir)\memory\RomKorean128in1.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomMajutsushi.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomManbow2.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomMitsubishiMLTS2.hh" />
@@ -1210,6 +1223,7 @@
     <None Include="$(OpenMSXSrcDir)\memory\RomMatraCompilation.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomMatraInk.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomMSXDOS2.hh" />
+    <None Include="$(OpenMSXSrcDir)\memory\RomNamco.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomNational.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomNeo8.hh" />
     <None Include="$(OpenMSXSrcDir)\memory\RomNeo16.hh" />

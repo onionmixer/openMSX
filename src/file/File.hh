@@ -4,18 +4,16 @@
 #include "FileBase.hh"
 #include "MappedFile.hh"
 
+#include "zstring_view.hh"
+
 #include <bit>
 #include <cstdint>
 #include <ctime>
 #include <memory>
 #include <span>
-#include <string>
-#include <string_view>
 #include <type_traits>
 
 namespace openmsx {
-
-class Filename;
 
 class File
 {
@@ -24,8 +22,6 @@ public:
 		NORMAL,
 		TRUNCATE,
 		CREATE,
-		LOAD_PERSISTENT,
-		SAVE_PERSISTENT,
 		PRE_CACHE,
 	};
 
@@ -41,9 +37,7 @@ public:
 	 * @throws FileNotFoundException if file not found
 	 * @throws FileException for other errors
 	 */
-	explicit File(std::string filename, OpenMode mode = OpenMode::NORMAL);
-	explicit File(const Filename& filename, OpenMode mode = OpenMode::NORMAL);
-	explicit File(Filename&& filename, OpenMode mode = OpenMode::NORMAL);
+	explicit File(zstring_view filename, OpenMode mode = OpenMode::NORMAL);
 
 	/** This constructor maps very closely on the fopen() libc function.
 	  * Compared to constructor above, it does not transparently
@@ -52,9 +46,8 @@ public:
 	  * @param mode Open mode, same meaning as in fopen(), but we assert
 	  *             that it contains a 'b' character.
 	  */
-	File(std::string filename, const char* mode);
-	File(const Filename& filename, const char* mode);
-	File(Filename&& filename, const char* mode);
+	File(zstring_view filename, const char* mode);
+
 	File(File&& other) noexcept;
 
 	/* Used by MemoryBufferFile. */
@@ -144,21 +137,13 @@ public:
 	 */
 	void flush();
 
-	/** Returns the URL of this file object.
-	 * Note: this returns a reference which may get invalidated by other
-	 * calls. For example: decompressing the internal buffer inside a
-	 * CompressedFileAdapter.
-	 * @throws FileException
-	 */
-	[[nodiscard]] const std::string& getURL() const;
-
-	/** Get Original filename for this object. This will usually just
-	 *  return the filename portion of the URL. However for compressed
-	 *  files this will be different.
+	/** Get original filename for this file. Usually this returns an
+	 *  empty string. Only for compressed files that store the original
+	 *  name this can be non-empty.
 	 * @result Original file name
 	 * @throws FileException
 	 */
-	[[nodiscard]] std::string_view getOriginalName();
+	[[nodiscard]] zstring_view getOriginalName();
 
 	/** Check if this file is readonly
 	 * @result true iff file is readonly
@@ -173,11 +158,8 @@ public:
 
 private:
 	friend class LocalFileReference;
-	/** This is an internal method used by LocalFileReference.
-	 * Returns the path to the (uncompressed) file on the local,
-	 * filesystem. Or an empty string in case there is no such path.
-	 */
-	[[nodiscard]] std::string getLocalReference() const;
+	/** This is an internal method used by LocalFileReference. */
+	[[nodiscard]] bool isLocalFile() const;
 
 	std::unique_ptr<FileBase> file;
 };

@@ -1,5 +1,7 @@
 #include "ImGuiRasterViewer.hh"
 
+#include "ImGuiTraceViewer.hh"
+
 #include "MSXMotherBoard.hh"
 #include "RawFrame.hh"
 #include "VDP.hh"
@@ -11,6 +13,7 @@
 #include "one_of.hh"
 #include "ranges.hh"
 #include "stl.hh"
+#include "subrange_between.hh"
 #include "unreachable.hh"
 
 #include <imgui.h>
@@ -29,8 +32,9 @@ static_assert(VISIBLE_PIXELS_PER_LINE % 2 == 0, "must be even");
 static constexpr auto FIRST_VISIBLE_LINE = 3 + 13;
 static constexpr auto FIRST_VISIBLE_X = (100 + 102) / 2;
 
-ImGuiRasterViewer::ImGuiRasterViewer(ImGuiManager& manager_)
+ImGuiRasterViewer::ImGuiRasterViewer(ImGuiManager& manager_, ImGuiTraceViewer& traceViewer_)
 	: ImGuiPart(manager_)
+	, traceViewer(traceViewer_)
 {
 }
 
@@ -107,15 +111,19 @@ void ImGuiRasterViewer::paint(MSXMotherBoard* motherBoard)
 
 	ImGui::SetNextWindowSize({700, 722}, ImGuiCond_FirstUseEver);
 	im::Window("Raster beam viewer", &show, [&]{
-		auto* vdp = dynamic_cast<VDP*>(motherBoard->findDevice("VDP")); // TODO name based OK?
-		if (!vdp) return;
-
 		im::TreeNode("Settings", ImGuiTreeNodeFlags_DefaultOpen, [&]{
 			paintSettings();
 		});
 		ImGui::Separator();
-		paintDisplay(vdp);
+		paintDisplay(*motherBoard);
 	});
+
+	if (showConfigure) {
+		ImGui::SetNextWindowSize(gl::vec2{19, 26} * ImGui::GetFontSize(), ImGuiCond_FirstUseEver);
+		im::Window("Raster beam - configure traces", &showConfigure, [&]{
+			paintConfigure(*motherBoard);
+		});
+	}
 }
 
 static const int MAX_ZOOM = 8;
@@ -184,10 +192,35 @@ void ImGuiRasterViewer::paintSettings()
 	});
 	HelpMarker("Shows the position where the line-IRQ will occur (when enabled)");
 
+	ImGui::SameLine();
+	ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+	ImGui::SameLine();
+
+	ImGui::Checkbox("Traces", &showTraces);
+	ImGui::SameLine();
+	im::Disabled(!showTraces, [&]{
+		if (ImGui::Button("Configure...")) {
+			showConfigure = true;
+		}
+	});
+	HelpMarker("Shows trace events (Debugger > Probe/Trace viewer) that happened the last frame");
 }
 
-void ImGuiRasterViewer::paintDisplay(VDP* vdp)
+ImGuiRasterViewer::TraceInfo& ImGuiRasterViewer::getTraceInfoFor(std::string_view name)
 {
+	auto it = std::ranges::lower_bound(traceInfos, name, {}, &TraceInfo::name);
+	if ((it != traceInfos.end()) && (it->name == name)) {
+		return *it;
+	}
+	auto [r, g, b] = generateDistinctColor(narrow_cast<unsigned>(traceInfos.size()));
+	return *traceInfos.emplace(it, std::string(name), gl::vec4{r, g, b, 1.0f}, true);
+}
+
+void ImGuiRasterViewer::paintDisplay(MSXMotherBoard& motherBoard)
+{
+	auto* vdp = dynamic_cast<VDP*>(motherBoard.findDevice("VDP")); // TODO name based OK?
+	if (!vdp) return;
+
 	EmuTime time = vdp->getCurrentTime();
 	const RawFrame* work = vdp->getWorkingFrame(time);
 	const RawFrame* last = vdp->getLastFrame();
@@ -214,6 +247,7 @@ void ImGuiRasterViewer::paintDisplay(VDP* vdp)
 	//   10 above and 10 below.
 	bool pal = vdp->isPalTiming();
 	int numLines = pal ? VDP::PAL_LINES : VDP::NTSC_LINES;
+	auto frameDuration = vdp->getFrameDuration();
 
 	int zoom = zoomSelect + 1;
 	gl::vec2 fullSize{float(PIXELS_PER_LINE), float(2 * numLines)};
@@ -226,6 +260,7 @@ void ImGuiRasterViewer::paintDisplay(VDP* vdp)
 	std::array<unsigned, VDP::NUM_LINES_MAX> allLineWidths;
 	std::ranges::fill(allLineWidths, 1); // default to border width
 
+	gl::vec2 closestPos{FLT_MAX};
 	im::Child("##display", min(availSize, reqSize), {}, ImGuiWindowFlags_HorizontalScrollbar, [&]{
 		scrnPos = ImGui::GetCursorScreenPos();
 
@@ -303,11 +338,11 @@ void ImGuiRasterViewer::paintDisplay(VDP* vdp)
 
 		auto* drawList = ImGui::GetWindowDrawList();
 		auto colorForLine = [&](int line) {
-			auto color = [&] {
+			auto color = [&] -> gl::vec4 {
 				static constexpr gl::vec4 opaque(1.0f);
 				if (!showFadeOut) return opaque;
 				float t = float(line - y) / float(numLines);
-				return ImLerp(fadeOutColor, opaque, t - std::floor(t));
+				return ImLerp(ImVec4(fadeOutColor), ImVec4(opaque), t - std::floor(t));
 			}();
 			return ImGui::ColorConvertFloat4ToU32(color);
 		};
@@ -403,22 +438,121 @@ void ImGuiRasterViewer::paintDisplay(VDP* vdp)
 			});
 		}
 
+		float closestDist = FLT_MAX;
+		std::string closestText;
+
+		auto addAnnotationXY = [&](auto textFunc, gl::vec4 color, gl::ivec2 vdpPos) {
+			gl::vec2 center = drawCrosshair(vdpPos, color, scrnPos, zoom, allLineWidths);
+			gl::vec2 mouse = ImGui::GetIO().MousePos;
+			auto dist2 = length2(mouse - center); // distance squared
+			if (dist2 <= closestDist) {
+				if (center == closestPos) {
+					strAppend(closestText, '\n', textFunc());
+				} else {
+					closestDist = dist2;
+					closestText = textFunc();
+					closestPos = center;
+				}
+			}
+		};
+		auto timeToVdpPos = [&](EmuTime tt) {
+			auto [xx, yy] = timeToXY(tt);
+			return gl::ivec2{xx, yy % numLines};
+		};
+		auto addAnnotation = [&](auto textFunc, gl::vec4 color, EmuTime tt) {
+			addAnnotationXY(textFunc, color, timeToVdpPos(tt));
+		};
+
 		if (showBeam) {
-			drawCrosshair(x, y, beamColor, scrnPos, zoom, allLineWidths);
+			addAnnotationXY([]{ return "Raster beam position (now)"; }, beamColor, {x, y});
 		}
 		if (showVblankIrq) {
 			if (auto vTime = vdp->getVScanTime()) {
-				auto [vx, vy] = timeToXY(*vTime);
-				vy %= numLines;
-				drawCrosshair(vx, vy, vblankIrqColor, scrnPos, zoom, allLineWidths);
+				addAnnotation([]{ return "Next VBLANK-IRQ position (future)"; }, vblankIrqColor, *vTime);
 			}
 		}
 		if (showLineIrq) {
 			if (auto hTime = vdp->getHScanTime()) {
-				auto [hx, hy] = timeToXY(*hTime);
-				hy %= numLines;
-				drawCrosshair(hx, hy, lineIrqColor, scrnPos, zoom, allLineWidths);
+				addAnnotation([]{ return "Next line-IRQ position (future)"; }, lineIrqColor, *hTime);
 			}
+		}
+		if (showTraces) {
+			EmuTime from = time.saturateSubtract(frameDuration);
+			EmuTime to = time;
+			const auto& traces = traceViewer.getTraces(motherBoard);
+			for (const auto* trace : traces) {
+				const auto& traceInfo = getTraceInfoFor(trace->name);
+				if (!traceInfo.enabled) continue;
+				auto subEvents = subrange_between(trace->events, from, to, {}, &Tracer::Event::time);
+				for (const auto& event : subEvents) {
+					auto tt = event.time + frameDuration; // bring event into the 'future' (doesn't change screen position)
+					auto print = [&]{
+						std::array<char, 64> buf;
+						auto valStr = ImGuiTraceViewer::formatTraceValue(event.value, buf, trace->getFormat());
+						return strCat(trace->name, strCat_if(!valStr.empty(), ": ", valStr));
+					};
+					addAnnotation(print, traceInfo.color, tt);
+				}
+			}
+			auto m1 = traceViewer.getMarker(0);
+			auto m2 = traceViewer.getMarker(1);
+			if (showMarkers) {
+				auto draw = [&](EmuTime tt, gl::vec4 color) {
+					if ((tt < from) || (tt >= to)) return;
+					tt += frameDuration; // bring into the 'future' (doesn't change screen position)
+					drawMarker(timeToVdpPos(tt), color, scrnPos, zoom, allLineWidths);
+				};
+				draw(m1, markerColor1);
+				draw(m2, markerColor2);
+
+			}
+			if (shadeType == Shade::MARKERS) {
+				// intersection of between-markers-interval and last-frame-interval
+				auto [mMin, mMax] = std::minmax(m1, m2);
+				auto mStart = std::max(mMin, from);
+				auto mStop  = std::min(mMax, to);
+				if (mStart < mStop) {
+					drawRegion(
+						timeToVdpPos(mStart + frameDuration), timeToVdpPos(mStop + frameDuration),
+						shadeColor, scrnPos, zoom, std::span(allLineWidths.data(), numLines));
+				}
+			} else if (shadeType == Shade::TRACE) {
+				if (auto t_it = std::ranges::find(traces, shadeTrace, &Tracer::Trace::name);
+				    t_it != traces.end()) {
+					const auto& trace = **t_it;
+
+					auto it0 = std::ranges::lower_bound(trace.events, from, {}, &Tracer::Event::time);
+					if (it0 != trace.events.begin()) --it0;
+					auto it1 = std::ranges::upper_bound(trace.events, to, {}, &Tracer::Event::time);
+
+					for (auto it = it0; it != it1; ++it) {
+						bool skip = it->value.visit(overloaded{
+							[](std::monostate) { return true; },
+							[](uint64_t i) { return i == 0; },
+							[](double d) { return d == 0.0; },
+							[](std::string_view s) { return s.empty(); }
+						});
+						if (skip) continue;
+						auto mStart = std::max(from, it->time);
+						auto next = it + 1;
+						auto mStop = std::min(to, (next == it1) ? to : next->time);
+						drawRegion(
+							timeToVdpPos(mStart + frameDuration), timeToVdpPos(mStop + frameDuration),
+							shadeColor, scrnPos, zoom, std::span(allLineWidths.data(), numLines));
+					}
+				}
+			}
+		}
+		if (closestDist < (6.0f * 6.0f)) {
+			im::Tooltip([&]{
+				auto [tx, vy] = trunc((closestPos - scrnPos) / (gl::vec2(0.5f, 2.0f) * float(zoom)));
+				int mx = (tx - vdp->getLeftSprites()) / 2;
+				int my = vy - vdp->getLineZero();
+				strAppend(closestText, "\nMSX coordinates: x=", mx, " y=", my);
+				ImGui::TextUnformatted(closestText);
+			});
+		} else {
+			closestPos = gl::vec2{FLT_MAX};
 		}
 	});
 	if (ImGui::IsItemHovered()) {
@@ -447,35 +581,188 @@ void ImGuiRasterViewer::paintDisplay(VDP* vdp)
 			ImGui::TextUnformatted("Absolute VDP coordinates: x="sv); dec3(vx);
 			ImGui::SameLine();
 			ImGui::TextUnformatted("line="sv); dec3(vy);
+
+			if (showMarkers && ImGui::IsMouseClicked(ImGuiMouseButton_Left)) {
+				if (closestPos.x < FLT_MAX) {
+					auto [xx, yy] = trunc((closestPos - scrnPos) / (gl::vec2(0.5f, 2.0f) * float(zoom)));
+					tx = xx;
+					vy = yy;
+				}
+				int ticks = vy * VDP::TICKS_PER_LINE + tx;
+				auto tt = vdp->getTimeInFrame(ticks);
+				if (tt > time) tt -= frameDuration;
+
+				bool shift = ImGui::IsKeyDown(ImGuiKey_LeftShift) || ImGui::IsKeyDown(ImGuiKey_RightShift);
+				traceViewer.setMarker(shift ? 1 : 0, tt);
+			}
 		}
 	}
 }
 
-void ImGuiRasterViewer::drawCrosshair(
-	int x, int y, gl::vec4 color_, gl::vec2 scrnPos, int zoom,
-	std::span<const unsigned, VDP::NUM_LINES_MAX> lineWidths)
+[[nodiscard]] static auto vdpToScreenCoord(
+	gl::ivec2 vdpPos, gl::vec2 scrnTopLeft, int zoom, std::span<const unsigned> lineWidths)
 {
-	auto xx = x / 2;
-	auto zx = 0.5f;
+	struct Result {
+		gl::vec2 center;
+		gl::vec2 halfPixel = {0.5f, 1.0f};
+	} result;
+
+	auto xx = vdpPos.x / 2;
 	auto cx = 0.5f;
-	if (lineWidths[y] == 320) {
+	if (lineWidths[vdpPos.y] == 320) {
 		xx = (xx + 1) & ~1; // round up to even
-		zx = 1.0f;
+		result.halfPixel.x = 1.0f;
 		cx = 0.25f;
 	}
-	gl::vec2 rasterBeamPos(float(xx), float(y) * 2.0f);
+	gl::vec2 rasterBeamPos(float(xx), float(vdpPos.y) * 2.0f);
+	result.halfPixel *= float(zoom);
+	result.center = scrnTopLeft + (gl::vec2(rasterBeamPos) + gl::vec2{cx, 1.0f}) * float(zoom);
+	return result;
+}
+
+gl::vec2 ImGuiRasterViewer::drawCrosshair(
+	gl::ivec2 vdpPos, gl::vec4 color_, gl::vec2 scrnTopLeft, int zoom,
+	std::span<const unsigned, VDP::NUM_LINES_MAX> lineWidths)
+{
+	auto [center, halfPixel] = vdpToScreenCoord(vdpPos, scrnTopLeft, zoom, lineWidths);
+
 	auto thickness = float(zoom) * 0.5f;
-	auto center = scrnPos + (gl::vec2(rasterBeamPos) + gl::vec2{cx, 1.0f}) * float(zoom);
-	gl::vec2 zm = float(zoom) * gl::vec2(zx, 1.0f);
+	gl::vec2 zm = halfPixel;
 	auto zm1 = 1.5f * zm;
 	auto zm3 = 3.5f * zm;
 	auto* drawList = ImGui::GetWindowDrawList();
 	auto color = ImGui::ColorConvertFloat4ToU32(color_);
-	drawList->AddRect(center - zm, center + zm, color, 0.0f, 0, thickness);
+	drawList->AddRect(center - zm, center + zm, color, 0.0f, thickness);
 	drawList->AddLine(center - gl::vec2{zm1.x, 0.0f}, center - gl::vec2{zm3.x, 0.0f}, color, thickness);
 	drawList->AddLine(center + gl::vec2{zm1.x, 0.0f}, center + gl::vec2{zm3.x, 0.0f}, color, thickness);
 	drawList->AddLine(center - gl::vec2{0.0f, zm1.y}, center - gl::vec2{0.0f, zm3.y}, color, thickness);
 	drawList->AddLine(center + gl::vec2{0.0f, zm1.y}, center + gl::vec2{0.0f, zm3.y}, color, thickness);
+	return center;
+}
+
+void ImGuiRasterViewer::drawMarker(
+	gl::ivec2 vdpPos, gl::vec4 color_, gl::vec2 scrnTopLeft, int zoom,
+	std::span<const unsigned, VDP::NUM_LINES_MAX> lineWidths)
+{
+	auto [center, _] = vdpToScreenCoord(vdpPos, scrnTopLeft, zoom, lineWidths);
+
+	auto* drawList = ImGui::GetWindowDrawList();
+	auto radius = float(zoom) * 4.0f;
+	auto color = ImGui::ColorConvertFloat4ToU32(color_);
+	auto thickness = float(zoom) * 2.0f;
+	drawList->AddCircle(center, radius, color, {}, thickness);
+}
+
+static void drawRegion3(
+	gl::ivec2 from, gl::ivec2 to, ImU32 color, gl::vec2 scrnTopLeft, int zoom,
+	std::span<const unsigned> lineWidths)
+{
+	assert(from.x <= to.x);
+	assert(from.y <= to.y);
+	auto [center1, halfPixel1] = vdpToScreenCoord(from, scrnTopLeft, zoom, lineWidths);
+	auto [center2, halfPixel2] = vdpToScreenCoord(to,   scrnTopLeft, zoom, lineWidths);
+	auto* drawList = ImGui::GetWindowDrawList();
+	drawList->AddRectFilled(center1 - halfPixel1, center2 + halfPixel2, color);
+}
+
+static void drawRegion2(
+	gl::ivec2 from, gl::ivec2 to, ImU32 color, gl::vec2 scrnTopLeft, int zoom,
+	std::span<const unsigned> lineWidths)
+{
+	assert(from.y <= to.y);
+	if (from.y == to.y) {
+		// single line
+		drawRegion3(from, to, color, scrnTopLeft, zoom, lineWidths);
+	} else {
+		// split in 2 or 3
+		drawRegion3(from, {VDP::TICKS_PER_LINE, from.y}, color, scrnTopLeft, zoom, lineWidths);
+		if ((from.y + 1) < to.y) {
+			drawRegion3({0, from.y + 1}, {VDP::TICKS_PER_LINE, to.y - 1}, color, scrnTopLeft, zoom, lineWidths);
+		}
+		drawRegion3({0, to.y}, to, color, scrnTopLeft, zoom, lineWidths);
+	}
+}
+
+void ImGuiRasterViewer::drawRegion(
+	gl::ivec2 from, gl::ivec2 to, gl::vec4 color_, gl::vec2 scrnTopLeft, int zoom,
+	std::span<const unsigned> lineWidths)
+{
+	auto color = ImGui::ColorConvertFloat4ToU32(color_);
+	if (std::tie(from.y, from.x) > std::tie(to.y, to.x)) {
+		// split in 2
+		drawRegion2(from, {VDP::TICKS_PER_LINE, narrow<int>(lineWidths.size() - 1)},
+		            color, scrnTopLeft, zoom, lineWidths);
+		drawRegion2({0, 0}, to,
+		            color, scrnTopLeft, zoom, lineWidths);
+	} else {
+		drawRegion2(from, to,
+		            color, scrnTopLeft, zoom, lineWidths);
+	}
+}
+
+void ImGuiRasterViewer::paintConfigure(MSXMotherBoard& motherBoard)
+{
+	ImGui::SeparatorText("Probes / traces");
+	if (ImGui::Button("Select probes/traces...")) {
+		traceViewer.showSelect = true;
+	}
+	HelpMarker("Select which probe and trace information will be collected.\n"
+	           "In some cases this can be expensive, so it's not done by default.");
+
+	const auto& traces = traceViewer.getTraces(motherBoard);
+	auto n = std::clamp(float(traces.size()), 1.0f, 5.5f);
+	im::Child("##list", {0, n * ImGui::GetFrameHeightWithSpacing()}, [&]{
+		if (traces.empty()) {
+			ImGui::TextDisabled("No traces selected");
+		} else {
+			im::ListClipperID(traces.size(), [&](int i) {
+				const auto* trace = traces[i];
+				auto& traceInfo = getTraceInfoFor(trace->name);
+
+				ImGui::ColorEdit4("##color", traceInfo.color.data(),
+					ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_NoLabel | ImGuiColorEditFlags_AlphaBar);
+				ImGui::SameLine();
+				ImGui::Checkbox(traceInfo.name.c_str(), &traceInfo.enabled);
+			});
+		}
+	});
+
+	ImGui::SeparatorText("Markers");
+	ImGui::Checkbox("Draw markers", &showMarkers);
+	HelpMarker("Show the 'Probe/Trace Viewer' markers also in the 'Raster Beam Viewer' window.");
+	im::DisabledIndent(!showMarkers, [&]{
+		ImGui::ColorEdit4("Primary", markerColor1.data(),
+			ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+		HelpMarker("Place via left-mouse-click in the 'Raster Beam Viewer' screen area.");
+		ImGui::ColorEdit4("Secondary", markerColor2.data(),
+			ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
+		HelpMarker("Place via shift-left-mouse-click in the 'Raster Beam Viewer' screen area.");
+	});
+
+	ImGui::SeparatorText("Shade");
+	ImGui::RadioButton("Disabled", &shadeType, Shade::DISABLED);
+	ImGui::RadioButton("Between markers", &shadeType, Shade::MARKERS);
+	HelpMarker("Color the area between the primary and secondary marker.");
+	ImGui::RadioButton("Trace", &shadeType, Shade::TRACE);
+	HelpMarker("Color the areas where a specific trace is active.");
+	im::DisabledIndent(shadeType != Shade::TRACE, [&]{
+		const char* preview =
+			traces.empty() ? "no traces selected" :
+			contains(traces, shadeTrace, &Tracer::Trace::name) ? shadeTrace.c_str() :
+			"none";
+		ImGui::SetNextItemWidth(-FLT_MIN);
+		im::Combo("##trace", preview, [&]{
+			im::ListClipperID(traces.size(), [&](int i) {
+				const auto* trace = traces[i];
+				if (ImGui::Selectable(trace->name.c_str())) {
+					shadeTrace = trace->name;
+				}
+			});
+		});
+	});
+
+	ImGui::ColorEdit4("Shade color", shadeColor.data(),
+		ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_AlphaBar);
 }
 
 } // namespace openmsx

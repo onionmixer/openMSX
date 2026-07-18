@@ -28,6 +28,15 @@ const XMLElement* XMLElement::findChild(std::string_view childName) const
 	}
 	return nullptr;
 }
+const XMLElement* XMLElement::findChildWithAttribute(std::string_view childName, std::string_view attrName, std::string_view attrValue) const
+{
+	for (const auto* child = firstChild; child; child = child->nextSibling) {
+		if (child->name == childName && child->getAttributeValue(attrName, "") == attrValue) {
+			return child;
+		}
+	}
+	return nullptr;
+}
 XMLElement* XMLElement::findChild(std::string_view childName)
 {
 	for (auto* child = firstChild; child; child = child->nextSibling) {
@@ -351,7 +360,7 @@ const char* XMLDocument::allocateString(std::string_view str)
 	return p;
 }
 
-void XMLDocument::load(const std::string& filename, std::string_view systemID)
+void XMLDocument::load(zstring_view filename, std::string_view systemID)
 {
 	assert(!root);
 

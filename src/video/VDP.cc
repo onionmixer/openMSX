@@ -46,20 +46,20 @@ TODO:
 
 namespace openmsx {
 
-static uint8_t getDelayCycles(const XMLElement& devices) {
-	uint8_t cycles = 0;
-	if (const auto* t9769Dev = devices.findChild("T9769")) {
-		if (t9769Dev->getChildData("subtype") == "C") {
-			cycles = 1;
-		} else {
-			cycles = 2;
-		}
+static uint8_t getDelayCycles(const XMLElement& devices)
+{
+	if (devices.findChild("T9769")) {
+		// See https://github.com/openMSX/openMSX/issues/989:
+		// All tested T9769 variants seem to introduce only 1 extra
+		// cycle. It is currently unknown what the observable
+		// differences are between the subtypes.
+		return 1;
 	} else if (devices.findChild("S1990")) {
 		// this case is purely there for backwards compatibility for
 		// turboR configs which do not have the T9769 tag yet.
-		cycles = 1;
+		return 1;
 	}
-	return cycles;
+	return 0;
 }
 
 VDP::VDP(const DeviceConfig& config)
@@ -1799,7 +1799,7 @@ VDP::FrameCountInfo::FrameCountInfo(VDP& vdp_)
 {
 }
 
-int VDP::FrameCountInfo::calc(const EmuTime& /*time*/) const
+int VDP::FrameCountInfo::calc(EmuTime /*time*/) const
 {
 	return vdp.frameCount;
 }
@@ -1815,7 +1815,7 @@ VDP::CycleInFrameInfo::CycleInFrameInfo(VDP& vdp_)
 {
 }
 
-int VDP::CycleInFrameInfo::calc(const EmuTime& time) const
+int VDP::CycleInFrameInfo::calc(EmuTime time) const
 {
 	return vdp.getTicksThisFrame(time);
 }
@@ -1833,7 +1833,7 @@ VDP::LineInFrameInfo::LineInFrameInfo(VDP& vdp_)
 {
 }
 
-int VDP::LineInFrameInfo::calc(const EmuTime& time) const
+int VDP::LineInFrameInfo::calc(EmuTime time) const
 {
 	return vdp.getTicksThisFrame(time) / VDP::TICKS_PER_LINE;
 }
@@ -1851,7 +1851,7 @@ VDP::CycleInLineInfo::CycleInLineInfo(VDP& vdp_)
 {
 }
 
-int VDP::CycleInLineInfo::calc(const EmuTime& time) const
+int VDP::CycleInLineInfo::calc(EmuTime time) const
 {
 	return vdp.getTicksThisFrame(time) % VDP::TICKS_PER_LINE;
 }
@@ -1868,7 +1868,7 @@ VDP::MsxYPosInfo::MsxYPosInfo(VDP& vdp_)
 {
 }
 
-int VDP::MsxYPosInfo::calc(const EmuTime& time) const
+int VDP::MsxYPosInfo::calc(EmuTime time) const
 {
 	return vdp.getMSXPos(time).y;
 }
@@ -1886,7 +1886,7 @@ VDP::MsxX256PosInfo::MsxX256PosInfo(VDP& vdp_)
 {
 }
 
-int VDP::MsxX256PosInfo::calc(const EmuTime& time) const
+int VDP::MsxX256PosInfo::calc(EmuTime time) const
 {
 	return vdp.getMSXPos(time).x / 2;
 }
@@ -1904,7 +1904,7 @@ VDP::MsxX512PosInfo::MsxX512PosInfo(VDP& vdp_)
 {
 }
 
-int VDP::MsxX512PosInfo::calc(const EmuTime& time) const
+int VDP::MsxX512PosInfo::calc(EmuTime time) const
 {
 	return vdp.getMSXPos(time).x;
 }

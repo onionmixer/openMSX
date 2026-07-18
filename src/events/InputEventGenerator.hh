@@ -44,9 +44,11 @@ public:
 	  *        events in the same batch use SDL_PollEvent(). If nullopt,
 	  *        uses SDL_PollEvent() for all events (non-blocking).
 	  */
-	void poll(std::optional<int> timeoutMs = std::nullopt);
+	void poll(std::optional<int> timeoutMs = {});
 
 	[[nodiscard]] JoystickManager& getJoystickManager() { return joystickManager; }
+
+	void initializeGrab() const;
 
 private:
 	void handle(SDL_Event& evt);

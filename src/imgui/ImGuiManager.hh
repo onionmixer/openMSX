@@ -45,6 +45,7 @@ class ImGuiMsxMusicViewer;
 class ImGuiOpenFile;
 class ImGuiOsdIcons;
 class ImGuiPalette;
+class ImGuiPlotterViewer;
 class ImGuiRasterViewer;
 class ImGuiReverseBar;
 class ImGuiSCCViewer;
@@ -52,6 +53,7 @@ class ImGuiSettings;
 class ImGuiSoundChip;
 class ImGuiSymbols;
 class ImGuiTools;
+class ImGuiTraceViewer;
 class ImGuiTrainer;
 class ImGuiVdpRegs;
 class ImGuiWatchExpr;
@@ -90,7 +92,7 @@ public:
 	}
 
 	void preNewFrame();
-	void paintImGui();
+	void paintImGui(bool msxDisplayAreaFocused);
 
 	void storeWindowPosition(gl::ivec2 pos) { windowPos = pos; }
 	[[nodiscard]] gl::ivec2 retrieveWindowPosition() const { return windowPos; }
@@ -156,8 +158,10 @@ public:
 	std::unique_ptr<ImGuiBreakPoints> breakPoints;
 	std::unique_ptr<ImGuiSymbols> symbols;
 	std::unique_ptr<ImGuiWatchExpr> watchExpr;
+	std::unique_ptr<ImGuiTraceViewer> traceViewer;
 	std::unique_ptr<ImGuiVdpRegs> vdpRegs;
 	std::unique_ptr<ImGuiPalette> palette;
+	std::unique_ptr<ImGuiPlotterViewer> plotterViewer;
 	std::unique_ptr<ImGuiRasterViewer> rasterViewer;
 	std::unique_ptr<ImGuiReverseBar> reverseBar;
 	std::unique_ptr<ImGuiHelp> help;

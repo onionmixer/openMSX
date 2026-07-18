@@ -10,6 +10,7 @@
 #include "ImGuiPalette.hh"
 #include "ImGuiRasterViewer.hh"
 #include "ImGuiSpriteViewer.hh"
+#include "ImGuiTraceViewer.hh"
 #include "ImGuiSymbols.hh"
 #include "ImGuiUtils.hh"
 #include "ImGuiVdpRegs.hh"
@@ -267,6 +268,7 @@ void ImGuiDebugger::showMenu(MSXMotherBoard* motherBoard)
 		});
 		ImGui::MenuItem("Symbol manager", nullptr, &manager.symbols->show);
 		ImGui::MenuItem("Watch expression", nullptr, &manager.watchExpr->show);
+		ImGui::MenuItem("Probe/Trace viewer", nullptr, &manager.traceViewer->show);
 		ImGui::Separator();
 		if (ImGui::MenuItem("VDP bitmap viewer")) {
 			openOrCreate(manager, bitmapViewers);
@@ -464,12 +466,8 @@ ImGuiDebugger::SlotInfo ImGuiDebugger::getSlotInfo(MSXCPUInterface& cpuInterface
 				auto addr = 0x4000 * page;
 				char separator = 'R';
 				for (int offset = 0; offset < 0x4000; offset += blockSize) {
-					r.segment += separator;
-					if (auto seg = romBlocks->readExt(addr + offset); seg != unsigned(-1)) {
-						strAppend(r.segment, seg);
-					} else {
-						r.segment += '-';
-					}
+					auto seg = romBlocks->readExt(addr + offset);
+					strAppend(r.segment, separator, strCat_if(seg != unsigned(-1), seg).else_('-'));
 					separator = '/';
 				}
 			} else {
@@ -757,10 +755,7 @@ void ImGuiDebugger::drawFlags(CPURegs& regs)
 				}
 			} else {
 				// vertical
-				s = strCat(name, ' ', val ? '1' : '0');
-				if (!val0.empty()) {
-					strAppend(s, " (", val ? val1 : val0, ')');
-				}
+				s = strCat(name, ' ', val ? '1' : '0', strCat_if(!val0.empty(), " (", val ? val1 : val0, ')'));
 				sz = sizeV;
 			}
 

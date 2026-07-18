@@ -222,6 +222,9 @@ public:
 	  *   In Graphic7 mode with YJK off, the range is [0..255].
 	  *   In other modes, the range is [0..15].
 	  */
+	[[nodiscard]] uint8_t getRawBackgroundColor() const {
+		return controlRegs[7];
+	}
 	[[nodiscard]] uint8_t getBackgroundColor() const {
 		uint8_t reg7 = controlRegs[7];
 		if (displayMode.getByte() == DisplayMode::GRAPHIC7) {
@@ -530,7 +533,9 @@ public:
 	[[nodiscard]] int getTicksThisFrame(EmuTime time) const {
 		return narrow<int>(frameStartTime.getTicksTill_fast(time));
 	}
-
+	[[nodiscard]] EmuTime getTimeInFrame(int ticks) const {
+		return frameStartTime + ticks;
+	}
 	[[nodiscard]] EmuTime getFrameStartTime() const {
 		return frameStartTime.getTime();
 	}
@@ -582,6 +587,12 @@ public:
 	  */
 	[[nodiscard]] int getTicksPerFrame() const {
 		return getLinesPerFrame() * TICKS_PER_LINE;
+	}
+
+	/** Gets the duration of a single frame (PAL or NTSC).
+	 */
+	[[nodiscard]] EmuDuration getFrameDuration() const {
+		return VDPClock::duration(getTicksPerFrame());
 	}
 
 	/** Is the given timestamp inside the current frame?
@@ -1103,7 +1114,7 @@ private:
 		void execute(std::span<const TclObject> tokens,
 		             TclObject& result) const override;
 		[[nodiscard]] std::string help(std::span<const TclObject> tokens) const override;
-		[[nodiscard]] virtual int calc(const EmuTime& time) const = 0;
+		[[nodiscard]] virtual int calc(EmuTime time) const = 0;
 	protected:
 		Info(VDP& vdp_, const std::string& name, std::string helpText_);
 		~Info() = default;
@@ -1113,37 +1124,37 @@ private:
 
 	struct FrameCountInfo final : Info {
 		explicit FrameCountInfo(VDP& vdp);
-		[[nodiscard]] int calc(const EmuTime& time) const override;
+		[[nodiscard]] int calc(EmuTime time) const override;
 	} frameCountInfo;
 
 	struct CycleInFrameInfo final : Info {
 		explicit CycleInFrameInfo(VDP& vdp);
-		[[nodiscard]] int calc(const EmuTime& time) const override;
+		[[nodiscard]] int calc(EmuTime time) const override;
 	} cycleInFrameInfo;
 
 	struct LineInFrameInfo final : Info {
 		explicit LineInFrameInfo(VDP& vdp);
-		[[nodiscard]] int calc(const EmuTime& time) const override;
+		[[nodiscard]] int calc(EmuTime time) const override;
 	} lineInFrameInfo;
 
 	struct CycleInLineInfo final : Info {
 		explicit CycleInLineInfo(VDP& vdp);
-		[[nodiscard]] int calc(const EmuTime& time) const override;
+		[[nodiscard]] int calc(EmuTime time) const override;
 	} cycleInLineInfo;
 
 	struct MsxYPosInfo final : Info {
 		explicit MsxYPosInfo(VDP& vdp);
-		[[nodiscard]] int calc(const EmuTime& time) const override;
+		[[nodiscard]] int calc(EmuTime time) const override;
 	} msxYPosInfo;
 
 	struct MsxX256PosInfo final : Info {
 		explicit MsxX256PosInfo(VDP& vdp);
-		[[nodiscard]] int calc(const EmuTime& time) const override;
+		[[nodiscard]] int calc(EmuTime time) const override;
 	} msxX256PosInfo;
 
 	struct MsxX512PosInfo final : Info {
 		explicit MsxX512PosInfo(VDP& vdp);
-		[[nodiscard]] int calc(const EmuTime& time) const override;
+		[[nodiscard]] int calc(EmuTime time) const override;
 	} msxX512PosInfo;
 
 	/** Renderer that converts this VDP's state into an image.

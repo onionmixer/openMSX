@@ -78,6 +78,16 @@ int TclObject::getInt(Interpreter& interp_) const
 	return result;
 }
 
+int64_t TclObject::getInt64(Interpreter& interp_) const
+{
+	auto* interp = interp_.interp;
+	Tcl_WideInt result;
+	if (Tcl_GetWideIntFromObj(interp, obj, &result) != TCL_OK) {
+		throwException(interp);
+	}
+	return int64_t(result);
+}
+
 std::optional<int> TclObject::getOptionalInt() const
 {
 	int result;
@@ -85,6 +95,15 @@ std::optional<int> TclObject::getOptionalInt() const
 		return {};
 	}
 	return result;
+}
+
+std::optional<int64_t> TclObject::getOptionalInt64() const
+{
+	Tcl_WideInt result;
+	if (Tcl_GetWideIntFromObj(nullptr, obj, &result) != TCL_OK) {
+		return {};
+	}
+	return int64_t(result);
 }
 
 bool TclObject::getBoolean(Interpreter& interp_) const
@@ -147,10 +166,19 @@ zstring_view TclObject::getString() const
 	return {buf, size_t(length)};
 }
 
-std::span<const uint8_t> TclObject::getBinary() const
+std::span<const uint8_t> TclObject::getBinary(Interpreter& interp_) const
 {
 	Tcl_Size length;
+#if TCL_MAJOR_VERSION >= 9
+	auto* interp = interp_.interp;
+	const auto* buf = Tcl_GetBytesFromObj(interp, obj, &length);
+	if (buf == nullptr) {
+		throwException(interp);
+	}
+#else
+	(void)interp_;
 	const auto* buf = Tcl_GetByteArrayFromObj(obj, &length);
+#endif
 	return {buf, size_t(length)};
 }
 

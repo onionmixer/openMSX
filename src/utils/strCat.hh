@@ -7,13 +7,14 @@
 
 #include <algorithm>
 #include <array>
-#include <climits>
 #include <cstdint>
 #include <limits>
+#include <optional>
 #include <span>
-#include <sstream>
 #include <string>
 #include <string_view>
+#include <functional>
+#include <type_traits>
 #include <tuple>
 #include <utility>
 
@@ -128,6 +129,8 @@ template<typename T> struct ConcatUnit;
 // Helper for types which are formatted via a temporary string object
 struct ConcatViaString
 {
+	using NonTrivialToConstruct = void;
+
 	explicit ConcatViaString(std::string s_)
 		: s(std::move(s_))
 	{
@@ -155,20 +158,6 @@ struct ConcatToString : ConcatViaString
 {
 	explicit ConcatToString(T t)
 		: ConcatViaString(std::to_string(t))
-	{
-	}
-};
-
-// The default (slow) implementation uses 'operator<<(ostream&, T)'
-template<typename T>
-struct ConcatUnit : ConcatViaString
-{
-	explicit ConcatUnit(const T& t)
-		: ConcatViaString([&]{
-			std::ostringstream os;
-			os << t;
-			return os.str();
-		}())
 	{
 	}
 };
@@ -284,6 +273,8 @@ template<std::signed_integral T>
 // result. This size can be used to calculate the start position in the buffer.
 template<std::integral T> struct ConcatIntegral
 {
+	using NonTrivialToConstruct = void;
+
 	static constexpr bool IS_SIGNED = std::numeric_limits<T>::is_signed;
 	static constexpr size_t BUF_SIZE = 1 + std::numeric_limits<T>::digits10 + IS_SIGNED;
 
@@ -387,7 +378,7 @@ template<size_t N, HexCase Case, std::integral T> struct ConcatFixedWidthHexInte
 		return N;
 	}
 
-	[[nodiscard]] char* copy(char* dst) const
+	char* copy(char* dst) const
 	{
 		char* p = dst + N;
 		auto u = static_cast<FastUnsigned<T>>(t);
@@ -403,8 +394,58 @@ template<size_t N, HexCase Case, std::integral T> struct ConcatFixedWidthHexInte
 		return dst + N;
 	}
 
+	friend std::ostream& operator<<(std::ostream& os, const ConcatFixedWidthHexIntegral& v)
+	{
+		std::array<char, N> buf;
+		v.copy(buf.data());
+		return os.write(buf.data(), N);
+	}
+
 private:
 	T t;
+};
+
+// Format an integral as a hexadecimal value (variable width)
+template<HexCase Case, std::integral T> struct ConcatHexIntegral
+{
+	explicit ConcatHexIntegral(T t)
+	{
+		using U = std::make_unsigned_t<T>;
+		U u = static_cast<U>(t);
+
+		char* p = buf.data() + buf.size();
+		if (u == 0) {
+			*--p = '0';
+		} else {
+			static constexpr char A = (Case == HexCase::lower) ? 'a' : 'A';
+			do {
+				auto d = u & 15;
+				*--p = (d < 10) ? static_cast<char>(d + '0')
+						: static_cast<char>(d - 10 + A);
+				u >>= 4;
+			} while (u);
+		}
+
+		n = static_cast<uint8_t>(buf.data() + buf.size() - p);
+	}
+
+	[[nodiscard]] size_t size() const { return n; }
+
+	[[nodiscard]] char* copy(char* dst) const
+	{
+		const char* start = buf.data() + buf.size() - n;
+		std::memcpy(dst, start, n);
+		return dst + n;
+	}
+
+	friend std::ostream& operator<<(std::ostream& os, const ConcatHexIntegral& v)
+	{
+		const char* start = v.buf.data() + v.buf.size() - v.n;
+		return os.write(start, v.n);
+	}
+private:
+	std::array<char, sizeof(T) * 2> buf{};
+	uint8_t n = 0;
 };
 
 // Format an integral as a binary value with a fixed number of characters.
@@ -422,7 +463,7 @@ template<size_t N, std::integral T> struct ConcatFixedWidthBinIntegral
 		return N;
 	}
 
-	[[nodiscard]] char* copy(char* dst) const
+	char* copy(char* dst) const
 	{
 		char* p = dst + N;
 		auto u = static_cast<FastUnsigned<T>>(t);
@@ -435,10 +476,56 @@ template<size_t N, std::integral T> struct ConcatFixedWidthBinIntegral
 		return dst + N;
 	}
 
+	friend std::ostream& operator<<(std::ostream& os, const ConcatFixedWidthBinIntegral& v)
+	{
+		std::array<char, N> buf;
+		v.copy(buf.data());
+		return os.write(buf.data(), N);
+	}
+
 private:
 	T t;
 };
 
+// Format an integral as a binary value (variable width).
+template<std::integral T> struct ConcatBinIntegral
+{
+	explicit ConcatBinIntegral(T t) {
+		using U = std::make_unsigned_t<T>;
+		U u = static_cast<U>(t);
+
+		char* p = buf.data() + buf.size();
+		if (u == 0) {
+			*--p = '0';
+		} else {
+			do {
+				*--p = static_cast<char>((u & 1) + '0');
+				u >>= 1;
+			} while (u);
+		}
+
+		n = static_cast<uint8_t>(buf.data() + buf.size() - p);
+	}
+
+	[[nodiscard]] size_t size() const { return n; }
+
+	[[nodiscard]] char* copy(char* dst) const
+	{
+		const char* start = buf.data() + buf.size() - n;
+		std::memcpy(dst, start, n);
+		return dst + n;
+	}
+
+	friend std::ostream& operator<<(std::ostream& os, const ConcatBinIntegral& v)
+	{
+		const char* start = v.buf.data() + v.buf.size() - v.n;
+		return os.write(start, v.n);
+	}
+
+private:
+	std::array<char, sizeof(T) * 8> buf{};
+	uint8_t n = 0;
+};
 
 // Prints a number of spaces (without constructing a temporary string).
 struct ConcatSpaces
@@ -582,9 +669,6 @@ template<typename T>
 	return ConcatIntegral<unsigned long long>(l);
 }
 
-// Converting float->string via std::to_string() might be faster than via
-// std::stringstream.
-
 [[nodiscard]] inline auto makeConcatUnit(float f)
 {
 	return ConcatToString<float>(f);
@@ -618,6 +702,12 @@ template<size_t N, std::integral T>
 	return t;
 }
 
+template<std::integral T>
+[[nodiscard]] inline auto makeConcatUnit(const ConcatBinIntegral<T>& t)
+{
+	return t;
+}
+
 template<size_t N, std::integral T>
 [[nodiscard]] inline auto makeConcatUnit(const ConcatFixedWidthDecIntegral<N, T>& t)
 {
@@ -625,6 +715,210 @@ template<size_t N, std::integral T>
 }
 
 [[nodiscard]] inline auto makeConcatUnit(const ConcatSpaces& t)
+{
+	return t;
+}
+
+struct Empty
+{
+	[[nodiscard]] size_t size() const { return 0; }
+	[[nodiscard]] char* copy(char* dst) const { return dst; }
+};
+
+template<typename... Ts>
+struct Group
+{
+	std::tuple<Ts...> t; // expected: concat-unit like objects
+
+	[[nodiscard]] size_t size() const
+	{
+		return std::apply([](const auto& ...x) { return (0 + ... + x.size()); }, t);
+	}
+
+	[[nodiscard]] char* copy(char* dst) const
+	{
+		std::apply([&](const auto& ...x) { ((dst = x.copy(dst)), ...); }, t);
+		return dst;
+	}
+};
+
+template<typename T>
+using ConcatUnitForArg = decltype(makeConcatUnit(std::declval<T>()));
+
+// Wrapper for callables whose evaluation must be deferred (e.g. in strCat_if when
+// the condition may be false). The callable is invoked only when size()/copy() is
+// actually needed.
+template<typename F>
+struct LazyStrCat
+{
+	explicit LazyStrCat(F f_)
+		: f(std::move(f_)) {}
+
+	F f;
+};
+
+template<typename F>
+LazyStrCat(F&&) -> LazyStrCat<std::remove_cvref_t<F>>;
+
+// ConcatUnit that invokes the callable on first use. Use with strCat_if() to
+// avoid evaluating expressions when the condition is false (e.g. to prevent
+// nullptr dereference or to skip expensive computation).
+template<typename F>
+struct LazyStrCatConcatUnit
+{
+	using R = std::invoke_result_t<F>;
+	explicit LazyStrCatConcatUnit(F f_)
+		: f(std::move(f_)) {}
+
+	[[nodiscard]] size_t size() const
+	{
+		assert(!concatUnit); // strCat framework calls size() exactly once before copy()
+		result.emplace(std::invoke(f));
+		concatUnit.emplace(makeConcatUnit(*result));
+		return concatUnit->size();
+	}
+
+	[[nodiscard]] char* copy(char* dst) const
+	{
+		assert(concatUnit); // size() must have been called first
+		return concatUnit->copy(dst);
+	}
+
+private:
+	mutable F f;
+	mutable std::optional<R> result;
+	mutable std::optional<ConcatUnitForArg<R>> concatUnit;
+};
+
+template<typename F>
+[[nodiscard]] inline auto makeConcatUnit(const LazyStrCat<F>& t)
+{
+	return LazyStrCatConcatUnit<F>(t.f);
+}
+
+// For expensive types: lazily build ConcatUnit on first size()/copy().
+template<typename T>
+struct LazyConcatUnit
+{
+	explicit LazyConcatUnit(T t)
+		: arg(std::move(t)) {}
+
+	[[nodiscard]] size_t size() const
+	{
+		assert(!concatUnit); // strCat framework calls size() exactly once before copy()
+		concatUnit.emplace(makeConcatUnit(std::move(arg)));
+		return concatUnit->size();
+	}
+
+	[[nodiscard]] char* copy(char* dst) const
+	{
+		assert(concatUnit); // size() must have been called first
+		return concatUnit->copy(dst);
+	}
+
+private:
+	mutable T arg;
+	mutable std::optional<ConcatUnitForArg<T>> concatUnit;
+};
+
+// ConcatUnit types can opt into lazy construction by defining NonTrivialToConstruct.
+template<typename T, typename = void>
+struct IsNonTrivialToConstruct : std::false_type {};
+template<typename T>
+struct IsNonTrivialToConstruct<T, std::void_t<typename T::NonTrivialToConstruct>> : std::true_type {};
+
+template<typename T>
+[[nodiscard]] auto makeLazyConcatUnit(T&& t)
+{
+	using T2 = std::remove_cvref_t<T>;
+	if constexpr (IsNonTrivialToConstruct<ConcatUnitForArg<T2>>::value) {
+		return LazyConcatUnit<T2>(std::forward<T>(t));
+	} else {
+		return makeConcatUnit(std::forward<T>(t));
+	}
+}
+
+// Per-element lazy: cheap types -> ConcatUnit immediately, expensive -> LazyConcatUnit.
+template<typename... Ts>
+[[nodiscard]] auto makeLazyConcatUnits(Ts&&... ts)
+{
+	if constexpr (sizeof...(Ts) == 1) { // single element doesn't need Group
+		return makeLazyConcatUnit(std::forward<Ts>(ts)...);
+	} else {
+		return Group{std::tuple{makeLazyConcatUnit(std::forward<Ts>(ts))...}};
+	}
+}
+
+template<typename IfPart, typename ElsePart>
+struct Conditional
+{
+	bool condition;
+	IfPart ifPart;
+	ElsePart elsePart;
+
+	[[nodiscard]] size_t size() const
+	{
+		return condition ? ifPart.size() : elsePart.size();
+	}
+
+	[[nodiscard]] char* copy(char* dst) const
+	{
+		return condition ? ifPart.copy(dst) : elsePart.copy(dst);
+	}
+
+	template<typename BOOL, typename... Ts> [[nodiscard]] auto else_if(BOOL c, Ts&&... ts) &&;
+	template<typename... Ts> [[nodiscard]] auto else_(Ts&&... ts) &&;
+};
+
+template<typename T> struct IsConditional : std::false_type {};
+template<typename IfPart, typename ElsePart>
+struct IsConditional<Conditional<IfPart, ElsePart>> : std::true_type {};
+
+template<auto> static inline constexpr bool always_false = false;
+
+template<typename IfPart, typename ElsePart, typename NewPart>
+[[nodiscard]] auto replaceEmptyTail(Conditional<IfPart, ElsePart>&& c, NewPart&& part)
+{
+	if constexpr (std::same_as<ElsePart, Empty>) {
+		return Conditional{
+			c.condition, std::move(c.ifPart), std::forward<NewPart>(part)
+		};
+	} else if constexpr (IsConditional<ElsePart>::value) {
+		return Conditional{
+			c.condition,
+			std::move(c.ifPart),
+			replaceEmptyTail(std::move(c.elsePart), std::forward<NewPart>(part))
+		};
+	} else {
+		static_assert(always_false<sizeof(ElsePart)>,
+			"Cannot chain .else_() or .else_if() after .else_()");
+		std::unreachable();
+	}
+}
+
+template<typename BOOL, typename... Ts>
+[[nodiscard]] inline auto if_(BOOL condition, Ts&&... ts)
+{
+	return Conditional{static_cast<bool>(condition), makeLazyConcatUnits(std::forward<Ts>(ts)...), Empty{}};
+}
+
+template<typename IfPart, typename ElsePart>
+template<typename BOOL, typename... Ts>
+[[nodiscard]] auto Conditional<IfPart, ElsePart>::else_if(BOOL c, Ts&&... ts) &&
+{
+	return replaceEmptyTail(std::move(*this), if_(c, std::forward<Ts>(ts)...));
+}
+
+template<typename IfPart, typename ElsePart>
+template<typename... Ts>
+[[nodiscard]] auto Conditional<IfPart, ElsePart>::else_(Ts&&... ts) &&
+{
+	return replaceEmptyTail(std::move(*this),
+		makeLazyConcatUnits(std::forward<Ts>(ts)...));
+}
+
+template<typename IfPart, typename ElsePart>
+[[nodiscard]] inline auto makeConcatUnit(const Conditional<IfPart, ElsePart>& t)
 {
 	return t;
 }
@@ -780,6 +1074,22 @@ inline void strAppend(std::string& x, const std::string& y) { x += y; }
 inline void strAppend(std::string& x, const char*        y) { x += y; }
 inline void strAppend(std::string& x, std::string_view   y) { x.append(y.data(), y.size()); }
 
+template<typename BOOL, typename... Ts>
+[[nodiscard]] inline auto strCat_if(BOOL condition, Ts&&... ts)
+{
+	return strCatImpl::if_(condition, std::forward<Ts>(ts)...);
+}
+
+// Defer evaluation of an expression until it is actually needed. Use inside
+// strCat_if() or .else_if() to avoid evaluating when the condition is false
+// (e.g. to prevent nullptr dereference or skip expensive computation).
+// The callable must return something that strCat can concatenate.
+template<typename F>
+[[nodiscard]] inline auto strCat_lazy(F&& f)
+{
+	return strCatImpl::LazyStrCat(std::forward<F>(f));
+}
+#define STRCAT_LAZY(...) strCat_lazy([&]{ return (__VA_ARGS__); })
 
 template<HexCase Case = HexCase::lower, std::integral T>
 [[nodiscard]] inline strCatImpl::ConcatVariableWidthHexIntegral<Case, T> hex_string(Digits n, T t)
@@ -793,10 +1103,22 @@ template<size_t N, HexCase Case = HexCase::lower, std::integral T>
 	return strCatImpl::ConcatFixedWidthHexIntegral<N, Case, T>{t};
 }
 
+template<HexCase Case = HexCase::lower, std::integral T>
+[[nodiscard]] inline auto hex_string(T t)
+{
+	return strCatImpl::ConcatHexIntegral<Case, T>{t};
+}
+
 template<size_t N, std::integral T>
 [[nodiscard]] inline auto bin_string(T t)
 {
 	return strCatImpl::ConcatFixedWidthBinIntegral<N, T>{t};
+}
+
+template<std::integral T>
+[[nodiscard]] inline auto bin_string(T t)
+{
+	return strCatImpl::ConcatBinIntegral<T>{t};
 }
 
 template<size_t N, std::integral T>

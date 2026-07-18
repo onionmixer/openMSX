@@ -249,7 +249,7 @@ double CassettePlayer::getTapePos(EmuTime time)
 		// we record 8-bit mono, so bytes == samples
 		return (double(recordImage->getBytes()) + partialInterval) * RECIP_RECORD_FREQ;
 	} else {
-		return (tapePos - EmuTime::zero()).toDouble();
+		return tapePos.toDouble();
 	}
 }
 
@@ -265,7 +265,7 @@ void CassettePlayer::setTapePos(EmuTime time, double newPos)
 double CassettePlayer::getTapeLength(EmuTime time)
 {
 	if (playImage) {
-		return (playImage->getEndTime() - EmuTime::zero()).toDouble();
+		return playImage->getEndTime().toDouble();
 	} else if (getState() == State::RECORD) {
 		return getTapePos(time);
 	} else {
@@ -402,8 +402,8 @@ void CassettePlayer::insertTape(const Filename& filename, EmuTime time)
 		if (!newImage) {
 			throw MSXException(
 				"Failed to insert image: "
-				"tried WAV: \"", msgWav + "\""
-				", CAS: \"", msgCas + "\""
+				"tried WAV: \"", msgWav, "\""
+				", CAS: \"", msgCas, "\""
 				" and TSX: \"", msgTsx, "\".");
 		}
 		playImage = std::move(newImage);
@@ -467,7 +467,7 @@ void CassettePlayer::wind(EmuTime time)
 void CassettePlayer::recordTape(const Filename& filename, EmuTime time)
 {
 	removeTape(time); // flush (possible) previous recording
-	recordImage = std::make_unique<Wav8Writer>(filename, 1, RECORD_FREQ);
+	recordImage = std::make_unique<Wav8Writer>(filename.getResolved(), 1, RECORD_FREQ);
 	tapePos = EmuTime::zero();
 	setState(State::RECORD, filename, time);
 }
@@ -702,13 +702,7 @@ void CassettePlayer::serialize(Archive& ar, unsigned version)
 		}
 	}
 	if (ar.versionAtLeast(version, 2)) {
-		std::string oldChecksumStr = oldChecksum.empty()
-		                      ? std::string{}
-		                      : oldChecksum.toString();
-		ar.serialize("checksum", oldChecksumStr);
-		oldChecksum = oldChecksumStr.empty()
-		            ? Sha1Sum()
-		            : Sha1Sum(oldChecksumStr);
+		ar.serialize("checksum", oldChecksum);
 	}
 
 	if constexpr (Archive::IS_LOADER) {
@@ -717,9 +711,9 @@ void CassettePlayer::serialize(Archive& ar, unsigned version)
 		casImage.updateAfterLoadState();
 		if (!oldChecksum.empty() &&
 		    !FileOperations::exists(casImage.getResolved())) {
-			auto file = filePool.getFile(FileType::TAPE, oldChecksum);
+			auto [file, filename] = filePool.getFile(FileType::TAPE, oldChecksum);
 			if (file.is_open()) {
-				casImage.setResolved(file.getURL());
+				casImage.setResolved(filename);
 			}
 		}
 		try {

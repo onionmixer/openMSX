@@ -155,7 +155,8 @@ void ImGuiMsxMusicViewer::paintMelodicChannel(ChipState& cs, HoverList& newHover
 		ImGui::StrCat(std::lround(freq));
 	});
 	drawCell(cs, newHoverList, regs, freqH, [&](uint32_t) { // note
-		ImGui::TextUnformatted(freq2note(freq));
+		std::array<char, 3> buf;
+		ImGui::TextUnformatted(freq2note(freq, buf));
 	});
 	drawCell(cs, newHoverList, regs, {r30, 0x0f}, drawVolume);
 	drawCell(cs, newHoverList, regs, {r30, 0xf0}, [&](uint32_t v) { // instrument
@@ -551,7 +552,7 @@ void ImGuiMsxMusicViewer::paint(MSXMotherBoard* motherBoard)
 	if (!show || !motherBoard) return;
 
 	ImGui::SetNextWindowSize(gl::vec2{33, 50} * ImGui::GetFontSize(), ImGuiCond_FirstUseEver);
-	im::Window("Msx-Music Viewer", &show, [&]{
+	im::Window("MSX Music Viewer", &show, [&]{
 		std::vector<const YM2413*> devices;
 		for (const auto& info: motherBoard->getMSXMixer().getDeviceInfos()) {
 			if (const auto* device = dynamic_cast<const YM2413*>(info.device)) {

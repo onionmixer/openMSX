@@ -531,7 +531,7 @@ void Reactor::switchMachine(const std::string& machine)
 	deleteBoard(oldBoard);
 }
 
-void Reactor::switchMachineFromSetup(const std::string& filename)
+void Reactor::switchMachineFromSetup(zstring_view filename)
 {
 	if (!display) {
 		display = std::make_unique<Display>(*this);
@@ -684,42 +684,25 @@ void Reactor::powerOn()
 
 void Reactor::run()
 {
-	static constexpr int MAX_WAIT_MS = 8;
-	bool executionFailed = false;
-
+	bool blocked = (blockedCounter > 0) || !activeBoard;
 	while (running) {
-		auto isBlocked = [&] {
-			return executionFailed || (blockedCounter > 0) || !activeBoard;
-		};
-		if (isBlocked()) {
-			executionFailed = false;  // Reset when blocked by other conditions
-			// Compute timeout, min of MAX_WAIT_MS and time until next
-			// RTScheduler event. This keeps UI responsive while avoiding
-			// busy-waiting when paused.
-			auto& rtScheduler = getRTScheduler();
-			int timeoutMs = MAX_WAIT_MS;
-			if (auto nextTime = rtScheduler.getNextTime()) {
-				auto now = Timer::getTime();
-				if (*nextTime > now) {
-					auto deltaUs = *nextTime - now;
-					auto deltaMs = static_cast<int>(deltaUs / 1000);
-					timeoutMs = std::min(timeoutMs, std::max(1, deltaMs));
-				} else {
-					// Already past due, don't wait
-					timeoutMs = 0;
-				}
-			}
-			eventDistributor->deliverEvents(timeoutMs);
-		} else {
-			eventDistributor->deliverEvents();
-		}
-
-		// Re-check. State may have changed during event processing
-		if (!isBlocked()) {
-			// copy shared_ptr to keep Board alive (e.g. in case of Tcl
-			// callbacks)
+		// Compute timeout: sleep if blocked, but not past next RT-event.
+		// This keeps UI responsive while avoiding busy-waiting when paused.
+		auto timeoutMs = [&] -> std::optional<int> {
+			static constexpr int MAX_WAIT_MS = 8;
+			if (!blocked) return {};
+			auto nextTime = getRTScheduler().getNextTime();
+			if (!nextTime) return MAX_WAIT_MS;
+			auto deltaUs = int64_t(*nextTime - Timer::getTime());
+			return std::clamp(narrow<int>(deltaUs / 1000), 0, MAX_WAIT_MS);
+		}();
+		eventDistributor->deliverEvents(timeoutMs);
+		blocked = (blockedCounter > 0) || !activeBoard;  // re-evaluate
+		if (!blocked) {
+			// copy shared_ptr to keep Board alive (e.g. in case of
+			// Tcl callbacks)
 			auto copy = activeBoard;
-			executionFailed = !copy->execute();
+			blocked = !copy->execute();
 		}
 	}
 }
@@ -1299,12 +1282,20 @@ SoftwareInfoTopic::SoftwareInfoTopic(InfoCommand& openMSXInfoCommand, Reactor& r
 void SoftwareInfoTopic::execute(
 	std::span<const TclObject> tokens, TclObject& result) const
 {
+	const auto& romDatabase = reactor.getSoftwareDatabase();
+	if (tokens.size() == 2) {
+		std::array<char, 40> buf;
+		for (const auto& [sha1, _] : romDatabase.getFullDB()) {
+			result.addListElement(sha1.toString(buf));
+		}
+		return;
+	}
+
 	if (tokens.size() != 3) {
 		throw CommandException("Wrong number of parameters");
 	}
 
 	Sha1Sum sha1sum(tokens[2].getString());
-	const auto& romDatabase = reactor.getSoftwareDatabase();
 	const RomInfo* romInfo = romDatabase.fetchRomInfo(sha1sum);
 	if (!romInfo) {
 		// no match found

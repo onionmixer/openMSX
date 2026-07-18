@@ -423,9 +423,9 @@ void TC8566AF::commandPhase1(uint8_t value)
 		   //(drive[driveSelect]->isDiskInserted() ? 0 : ST0_DS0) |
 	           (value & (ST0_DS0 | ST0_DS1)) |
 	           (drive[driveSelect]->isDummyDrive() ? ST0_IC1 : 0));
-	status3  = (value & (ST3_DS0 | ST3_DS1)) |
+	status3  = (value & (ST3_DS0 | ST3_DS1 | ST3_HD)) |
 	           (drive[driveSelect]->isTrack00()        ? ST3_TK0 : 0) |
-	           (drive[driveSelect]->isDoubleSided()    ? ST3_HD  : 0) |
+	           (drive[driveSelect]->isDoubleSided()    ? ST3_2S  : 0) |
 	           (drive[driveSelect]->isWriteProtected() ? ST3_WP  : 0) |
 	           (drive[driveSelect]->isDiskInserted()   ? ST3_RDY : 0);
 }
@@ -731,9 +731,16 @@ void TC8566AF::doSeek(int n)
 	};
 
 	if (currentDrive.isDummyDrive()) {
+		// No drive connected. Do NOT take a fast-fail shortcut here:
+		// real hardware keeps stepping until the 255 step-pulse limit
+		// is exhausted, with the drive-busy bit held high the whole
+		// time. Probes like FastCopy 3.0 only consult ST0 (via SENSE
+		// INTERRUPT STATUS) after observing the busy bit, so an
+		// instant completion would hide the error from them. Mark the
+		// drive as Not Ready and fall through; the regular
+		// SEEK/RECALIBRATE logic below will step the (no-op) DummyDrive
+		// and eventually set Equipment Check on RECALIBRATE.
 		status0 |= ST0_NR;
-		endSeek();
-		return;
 	}
 
 	bool direction = false; // initialize to avoid warning

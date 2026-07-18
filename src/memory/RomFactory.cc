@@ -39,6 +39,7 @@
 #include "RomMatraInk.hh"
 #include "RomMitsubishiMLTS2.hh"
 #include "RomMultiRom.hh"
+#include "RomNamco.hh"
 #include "RomNational.hh"
 #include "RomNeo16.hh"
 #include "RomNeo8.hh"
@@ -57,6 +58,7 @@
 #include "RomSynthesizer.hh"
 #include "RomTypes.hh"
 #include "RomWonderKid.hh"
+#include "RomKorean128in1.hh"
 #include "RomZemina126in1.hh"
 #include "RomZemina25in1.hh"
 #include "RomZemina80in1.hh"
@@ -185,20 +187,19 @@ std::unique_ptr<MSXDevice> create(DeviceConfig& config)
 			if (!romInfo) {
 				romInfo = config.getReactor().getSoftwareDatabase().fetchRomInfo(rom.getOriginalSHA1());
 			}
-			// If still not found, guess the mapper type
-			if (!romInfo) {
-				auto machineType = config.getMotherBoard().getMachineType();
-				if (machineType == "Coleco") {
-					if (rom.size() == one_of(128*1024u, 256*1024u, 512*1024u, 1024*1024u)) {
-						return COLECOMEGACART;
-					} else {
-						return PAGE23;
-					}
+			auto dbType = romInfo ? romInfo->getRomType() : RomType::UNKNOWN;
+			if (dbType != RomType::UNKNOWN) return dbType;
+
+			// If still not found, or database doesn't have info, guess the mapper type
+			auto machineType = config.getMotherBoard().getMachineType();
+			if (machineType == "Coleco") {
+				if (rom.size() == one_of(128*1024u, 256*1024u, 512*1024u, 1024*1024u)) {
+					return COLECOMEGACART;
 				} else {
-					return guessRomType(rom);
+					return PAGE23;
 				}
 			} else {
-				return romInfo->getRomType();
+				return guessRomType(rom);
 			}
 		} else {
 			// Use mapper type from config, even if this overrides DB.
@@ -308,6 +309,8 @@ std::unique_ptr<MSXDevice> create(DeviceConfig& config)
 		return std::make_unique<RomPanasonic>(config, std::move(rom));
 	case NATIONAL:
 		return std::make_unique<RomNational>(config, std::move(rom));
+	case NAMCO:
+		return std::make_unique<RomNamco>(config, std::move(rom));
 	case NEO8:
 		return std::make_unique<RomNeo8>(config, std::move(rom));
 	case NEO16:
@@ -378,6 +381,8 @@ std::unique_ptr<MSXDevice> create(DeviceConfig& config)
 		return std::make_unique<RomColecoMegaCart>(config, std::move(rom));
 	case WONDERKID:
 		return std::make_unique<RomWonderKid>(config, std::move(rom));
+	case KOREAN128IN1:
+		return std::make_unique<RomKorean128in1>(config, std::move(rom));
 	case NUM: case UNKNOWN: break; // no actual rom types
 	}
 	throw MSXException("Unknown ROM type");

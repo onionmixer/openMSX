@@ -3,7 +3,7 @@
 #  (preferably keep this list sorted on script name)
 register_lazy "_about.tcl" about
 register_lazy "_backwards_compatibility.tcl" {quit decr restoredefault alias}
-register_lazy "_cheat.tcl" {findcheat start search}
+register_lazy "_cheat.tcl" {findcheat}
 register_lazy "_cashandler.tcl" {casload cassave caslist casrun caspos caseject tapedeck}
 register_lazy "_cpuregs.tcl" {reg cpuregs get_active_cpu}
 register_lazy "_cycle.tcl" {cycle cycle_back toggle}
@@ -64,6 +64,7 @@ register_lazy "_test_machines_and_extensions.tcl" {
 	test_all_machines test_all_extensions}
 register_lazy "_text_echo.tcl" text_echo
 register_lazy "_toggle_freq.tcl" toggle_freq
+register_lazy "_trace.tcl" {cpu_trace}
 register_lazy "_trainer.tcl" {trainer load_trainers}
 register_lazy "_type_from_file.tcl" {type_from_file type_password_from_file}
 register_lazy "_type_via_keybuf.tcl" {type_via_keybuf}
@@ -83,3 +84,4 @@ register_lazy "_vdp_busy.tcl" toggle_vdp_busy
 register_lazy "_vdrive.tcl" vdrive
 register_lazy "_vgmrecorder.tcl" {vgm_rec vgm_rec_next vgm_rec_end}
 register_lazy "_tcl_bridge.tcl" tcl_bridge
+register_lazy "_profiler.tcl" symboltracer

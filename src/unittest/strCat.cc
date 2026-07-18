@@ -2,22 +2,10 @@
 #include "strCat.hh"
 
 #include <array>
-#include <iostream>
 
 static std::string rValue()
 {
 	return "bar";
-}
-
-struct MyType
-{
-	char c;
-};
-
-static std::ostream& operator<<(std::ostream& os, const MyType& m)
-{
-	os << "--|" << m.c << "|--";
-	return os;
 }
 
 TEST_CASE("strCat")
@@ -32,7 +20,6 @@ TEST_CASE("strCat")
 	int i = 123456;
 	float f = 6.28f;
 	double d = -1.234;
-	MyType t = {'a'};
 
 	SECTION("zero") {
 		CHECK(strCat() == "");
@@ -49,7 +36,6 @@ TEST_CASE("strCat")
 		CHECK(strCat(i) == "123456");
 		CHECK(strCat(f) == "6.280000");
 		CHECK(strCat(d) == "-1.234000");
-		CHECK(strCat(t) == "--|a|--");
 		CHECK(strCat(hex_string<8>(i)) == "0001e240");
 		CHECK(strCat(hex_string<4>(i)) == "e240");
 		CHECK(strCat(hex_string<4, HexCase::upper>(i)) == "E240");
@@ -58,6 +44,14 @@ TEST_CASE("strCat")
 		CHECK(strCat(hex_string(Digits{3}, i)) == "240");
 		CHECK(strCat(bin_string<16>(i)) == "1110001001000000");
 		CHECK(strCat(bin_string<8>(i)) == "01000000");
+		CHECK(strCat(bin_string(uint8_t(0))) == "0");
+		CHECK(strCat(bin_string(uint8_t(11))) == "1011");
+		CHECK(strCat(bin_string(uint8_t(131))) == "10000011");
+		CHECK(strCat(bin_string(int8_t(11))) == "1011");
+		CHECK(strCat(bin_string(int8_t(-11))) == "11110101");
+		CHECK(strCat(bin_string(1234)) == "10011010010");
+		CHECK(strCat(bin_string(uint64_t(123))) == "1111011");
+		CHECK(strCat(bin_string(int64_t(-123))) == "1111111111111111111111111111111111111111111111111111111110000101");
 		CHECK(strCat(dec_string<8>(i)) == "  123456");
 		CHECK(strCat(dec_string<6>(i)) == "123456");
 		CHECK(strCat(dec_string<4>(i)) == "3456");
@@ -154,6 +148,107 @@ TEST_CASE("strAppend")
 		strAppend(s, str, sr, literal, spaces(3));
 		strAppend(s, buf.data(), c, u, ll, rValue());
 		CHECK(s == "blamnorstijklmn   de+4294967295-876bar");
+	}
+}
+
+TEST_CASE("strCat_if")
+{
+	SECTION("if only") {
+		CHECK(strCat("foo", strCat_if(true, "bla", 42, ' ')) == "foobla42 ");
+		CHECK(strCat("foo", strCat_if(false, "bla", 42, ' ')) == "foo");
+	}
+
+	SECTION("if else") {
+		CHECK(strCat("x", strCat_if(true, "a").else_("b"), "y") == "xay");
+		CHECK(strCat("x", strCat_if(false, "a").else_("b"), "y") == "xby");
+		CHECK(strCat("x", strCat_if(false, "a").else_("b", 7, ' '), "y") == "xb7 y");
+	}
+
+	SECTION("if else_if else chain") {
+		CHECK(strCat("bla", strCat_if(true, ' ').else_if(true, "t").else_("xyz"), "\n") == "bla \n");
+		CHECK(strCat("bla", strCat_if(false, ' ').else_if(true, "t").else_("xyz"), "\n") == "blat\n");
+		CHECK(strCat("bla", strCat_if(false, ' ').else_if(false, "t").else_("xyz"), "\n") == "blaxyz\n");
+		CHECK(strCat("x", strCat_if(false, "a").else_if(true, "b", 7, ' ').else_("z"), "y") == "xb7 y");
+	}
+
+	SECTION("if else_if without else") {
+		CHECK(strCat("x", strCat_if(false, "a").else_if(false, "b"), "y") == "xy");
+		CHECK(strCat("x", strCat_if(false, "a").else_if(true, "b"), "y") == "xby");
+	}
+
+	SECTION("zero-arg branches are allowed") {
+		CHECK(strCat("x", strCat_if(true), "y") == "xy");
+		CHECK(strCat("x", strCat_if(false), "y") == "xy");
+		CHECK(strCat("x", strCat_if(false, "a").else_if(true), "y") == "xy");
+		CHECK(strCat("x", strCat_if(false, "a").else_if(false).else_(), "y") == "xy");
+	}
+}
+
+TEST_CASE("lazy")
+{
+	SECTION("basic usage in strCat") {
+		CHECK(strCat("a", strCat_lazy([&]{ return std::string("b"); }), "c") == "abc");
+		CHECK(strCat("x", strCat_lazy([&]{ return 42; }), "y") == "x42y");
+		CHECK(strCat(strCat_lazy([&]{ return "foo"; })) == "foo");
+	}
+
+	SECTION("lazy with strCat_if - condition true, lambda invoked") {
+		int callCount = 0;
+		CHECK(strCat("pre", strCat_if(true, strCat_lazy([&]{
+			++callCount;
+			return "mid";
+		})), "suf") == "premidsuf");
+		CHECK(callCount == 1);
+	}
+
+	SECTION("lazy with strCat_if - condition false, lambda not invoked") {
+		int callCount = 0;
+		CHECK(strCat("pre", strCat_if(false, strCat_lazy([&]{
+			++callCount;
+			return "mid";
+		})), "suf") == "presuf");
+		CHECK(callCount == 0);
+	}
+
+	SECTION("lazy with else_ - condition false, lambda invoked for else") {
+		int callCount = 0;
+		CHECK(strCat("x", strCat_if(false, "a").else_(strCat_lazy([&]{
+			++callCount;
+			return "b";
+		})), "y") == "xby");
+		CHECK(callCount == 1);
+	}
+
+	SECTION("lazy with else_ - condition true, else lambda not invoked") {
+		int callCount = 0;
+		CHECK(strCat("x", strCat_if(true, "a").else_(strCat_lazy([&]{
+			++callCount;
+			return "b";
+		})), "y") == "xay");
+		CHECK(callCount == 0);
+	}
+
+	SECTION("lazy with else_if - only invoked when that branch is taken") {
+		int callCount = 0;
+		CHECK(strCat("x", strCat_if(false, "a").else_if(true, strCat_lazy([&]{
+			++callCount;
+			return "b";
+		})), "y") == "xby");
+		CHECK(callCount == 1);
+		callCount = 0;
+		CHECK(strCat("x", strCat_if(true, "a").else_if(true, strCat_lazy([&]{
+			++callCount;
+			return "b";
+		})), "y") == "xay");
+		CHECK(callCount == 0);
+	}
+
+	SECTION("compare with/without lazy") {
+		int i = 0;
+		CHECK(strCat("a", strCat_if(false, STRCAT_LAZY(++i)), "z") == "az");
+		CHECK(i == 0);
+		CHECK(strCat("a", strCat_if(false, ++i), "z") == "az");
+		CHECK(i == 1);
 	}
 }
 

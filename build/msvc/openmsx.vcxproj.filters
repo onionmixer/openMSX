@@ -267,6 +267,9 @@
     <ClCompile Include="$(OpenMSXSrcDir)\debugger\SymbolManager.cc">
       <Filter>debugger</Filter>
     </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\debugger\Tracer.cc">
+      <Filter>debugger</Filter>
+    </ClCompile>
     <ClCompile Include="$(OpenMSXSrcDir)\events\AfterCommand.cc">
       <Filter>events</Filter>
     </ClCompile>
@@ -624,6 +627,9 @@
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiTools.cc">
       <Filter>imgui</Filter>
     </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiTraceViewer.cc">
+      <Filter>imgui</Filter>
+    </ClCompile>
     <ClCompile Include="$(OpenMSXSrcDir)\imgui\ImGuiTrainer.cc">
       <Filter>imgui</Filter>
     </ClCompile>
@@ -861,6 +867,9 @@
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomKonamiSCC.cc">
       <Filter>memory</Filter>
     </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\memory\RomKorean128in1.cc">
+      <Filter>memory</Filter>
+    </ClCompile>
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomMajutsushi.cc">
       <Filter>memory</Filter>
     </ClCompile>
@@ -874,6 +883,9 @@
       <Filter>memory</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomMSXDOS2.cc">
+      <Filter>memory</Filter>
+    </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\memory\RomNamco.cc">
       <Filter>memory</Filter>
     </ClCompile>
     <ClCompile Include="$(OpenMSXSrcDir)\memory\RomNational.cc">
@@ -1767,6 +1779,9 @@
     <None Include="$(OpenMSXSrcDir)\debugger\SymbolManager.hh">
       <Filter>debugger</Filter>
     </None>
+    <None Include="$(OpenMSXSrcDir)\debugger\Tracer.hh">
+      <Filter>debugger</Filter>
+    </None>
     <None Include="$(OpenMSXSrcDir)\events\AfterCommand.hh">
       <Filter>events</Filter>
     </None>
@@ -2148,6 +2163,9 @@
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiTools.hh">
       <Filter>imgui</Filter>
     </None>
+    <None Include="$(OpenMSXSrcDir)\imgui\ImGuiTraceViewer.hh">
+      <Filter>imgui</Filter>
+    </None>
     <None Include="$(OpenMSXSrcDir)\imgui\ImGuiTrainer.hh">
       <Filter>imgui</Filter>
     </None>
@@ -2391,6 +2409,9 @@
     <None Include="$(OpenMSXSrcDir)\memory\RomKonamiSCC.hh">
       <Filter>memory</Filter>
     </None>
+    <None Include="$(OpenMSXSrcDir)\memory\RomKorean128in1.hh">
+      <Filter>memory</Filter>
+    </None>
     <None Include="$(OpenMSXSrcDir)\memory\RomMajutsushi.hh">
       <Filter>memory</Filter>
     </None>
@@ -2404,6 +2425,9 @@
       <Filter>memory</Filter>
     </None>
     <None Include="$(OpenMSXSrcDir)\memory\RomMSXDOS2.hh">
+      <Filter>memory</Filter>
+    </None>
+    <None Include="$(OpenMSXSrcDir)\memory\RomNamco.hh">
       <Filter>memory</Filter>
     </None>
     <None Include="$(OpenMSXSrcDir)\memory\RomNational.hh">

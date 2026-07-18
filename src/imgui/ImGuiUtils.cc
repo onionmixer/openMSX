@@ -278,22 +278,21 @@ float calculateFade(float current, float target, float period)
 	}
 }
 
-std::string getShortCutForCommand(const HotKey& hotkey, std::string_view command)
+TemporaryString getShortCutForCommand(const HotKey& hotkey, std::string_view command)
 {
 	for (const auto& info : hotkey.getGlobalBindings()) {
 		if (info.command != command) continue;
 		if (const auto* keyDown = std::get_if<KeyDownEvent>(&info.event)) {
-			std::string result;
 			auto modifiers = keyDown->getModifiers();
-			if (modifiers & KMOD_CTRL)  strAppend(result, "CTRL+");
-			if (modifiers & KMOD_SHIFT) strAppend(result, "SHIFT+");
-			if (modifiers & KMOD_ALT)   strAppend(result, "ALT+");
-			if (modifiers & KMOD_GUI)   strAppend(result, "GUI+");
-			strAppend(result, SDL_GetKeyName(keyDown->getKeyCode()));
-			return result;
+			return tmpStrCat(
+				strCat_if(modifiers & KMOD_CTRL,  "CTRL+"),
+				strCat_if(modifiers & KMOD_SHIFT, "SHIFT+"),
+				strCat_if(modifiers & KMOD_ALT,   "ALT+"),
+				strCat_if(modifiers & KMOD_GUI,   "GUI+"),
+				SDL_GetKeyName(keyDown->getKeyCode()));
 		}
 	}
-	return "";
+	return TemporaryString{};
 }
 
 [[nodiscard]] static std::string_view superName()
@@ -341,8 +340,9 @@ std::optional<ImGuiKeyChord> parseKeyChord(std::string_view name)
 
 void setColors(int style)
 {
-	// style: 0->dark, 1->light, 2->classic
+	// style: 0->dark, 1->light, 2->classic, 3->colorblind
 	bool light = style == 1;
+	bool colorblind = style == 3;
 	using enum imColor;
 
 	//                                   AA'BB'GG'RR
@@ -357,13 +357,14 @@ void setColors(int style)
 	imColors[size_t(TEXT          )] = ImGui::GetColorU32(ImGuiCol_Text);
 	imColors[size_t(TEXT_DISABLED )] = ImGui::GetColorU32(ImGuiCol_TextDisabled);
 
-	imColors[size_t(ERROR         )] = 0xff'00'00'ff;
+	imColors[size_t(ERROR         )] = colorblind ? 0xff'00'ff'ff : 0xff'00'00'ff;
 	imColors[size_t(WARNING       )] = 0xff'33'b3'ff;
 
 	imColors[size_t(COMMENT       )] = 0xff'5c'ff'5c;
 	imColors[size_t(VARIABLE      )] = 0xff'ff'ff'00;
-	imColors[size_t(LITERAL       )] = light ? 0xff'9c'5d'27 : 0xff'00'ff'ff;
-	imColors[size_t(PROC          )] = 0xff'cd'00'cd;
+	imColors[size_t(LITERAL       )] = light      ? 0xff'9c'5d'27 : 0xff'00'ff'ff;
+	imColors[size_t(PROC          )] = colorblind ? 0xff'00'ee'aa : 0xff'cd'00'cd;
+
 	imColors[size_t(OPERATOR      )] = 0xff'cd'cd'00;
 
 	imColors[size_t(KEY_ACTIVE    )] = 0xff'10'40'ff;
@@ -371,7 +372,7 @@ void setColors(int style)
 }
 
 std::string formatToString(function_ref<uint8_t(unsigned)> fetch, unsigned begin, unsigned end, std::string_view prefix,
-	unsigned columns, std::string_view suffix, std::string_view formatStr, Interpreter& interp)
+	unsigned columns, std::string_view suffix, std::string_view separator, std::function<std::string(uint8_t)> formatFunc)
 {
 	std::string result;
 	unsigned col = 0;
@@ -379,15 +380,13 @@ std::string formatToString(function_ref<uint8_t(unsigned)> fetch, unsigned begin
 		if (col == 0) strAppend(result, prefix);
 
 		auto val = fetch(addr);
-		auto cmd = makeTclList("format", formatStr, val);
-		auto formatted = cmd.executeCommand(interp); // may throw
-		strAppend(result, formatted.getString());
+		strAppend(result, formatFunc(val));
 
 		if (++col == columns) {
 			col = 0;
 			strAppend(result, suffix, '\n');
 		} else if (addr != end) {
-			strAppend(result, ", ");
+			strAppend(result, separator);
 		}
 	}
 
@@ -396,6 +395,17 @@ std::string formatToString(function_ref<uint8_t(unsigned)> fetch, unsigned begin
 	}
 	return result;
 }
+
+std::string formatToString(function_ref<uint8_t(unsigned)> fetch, unsigned begin, unsigned end, std::string_view prefix,
+	unsigned columns, std::string_view suffix, std::string_view separator, std::string_view formatStr, Interpreter& interp)
+{
+	return formatToString(fetch, begin, end, prefix, columns, suffix, separator, [formatStr, &interp] (uint8_t val) {
+		auto cmd = makeTclList("format", formatStr, val);
+		auto formatted = cmd.executeCommand(interp); // may throw
+		return std::string(formatted.getString());
+	});
+}
+
 
 [[nodiscard]] std::string rawToString(
 	function_ref<uint8_t(unsigned)> fetch,

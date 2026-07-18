@@ -8,10 +8,10 @@
 #include <charconv>
 #include <concepts>
 #include <cstdint>
-#include <iomanip>
+#include <cstdlib>
+#include <cstring>
 #include <limits>
 #include <optional>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -242,6 +242,41 @@ namespace StringOp
 			}
 		}
 	}
+
+	#if 0
+	// Doesn't work yet in MacOS :(
+	template<std::floating_point T>
+	[[nodiscard]] std::optional<T> stringTo(std::string_view s)
+	{
+		T result{}; // dummy init
+		const char* b = s.data();
+		const char* e = s.data() + s.size();
+		if (auto [p, ec] = std::from_chars(b, e, result);
+		    (ec == std::errc{}) && (p == e)) {
+			return result;
+		}
+		return std::nullopt;
+	}
+	#else
+	template<typename T>
+		requires std::is_same_v<T, double>
+	[[nodiscard]] std::optional<T> stringTo(std::string_view s)
+	{
+		// strtod expects a null-terminated string
+		char buf[128];
+		if (s.size() >= sizeof(buf)) return std::nullopt;
+		memcpy(buf, s.data(), s.size());
+		buf[s.size()] = '\0';
+
+		errno = 0;
+		char* end = nullptr;
+		double value = strtod(buf, &end);
+
+		if (errno != 0) return std::nullopt;
+		if (end != (buf + s.size())) return std::nullopt;
+		return value;
+	}
+	#endif
 }
 
 #endif

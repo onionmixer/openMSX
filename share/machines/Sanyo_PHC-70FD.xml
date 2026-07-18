@@ -29,6 +29,9 @@
       </rom>
       <io base="0xD8" num="2" type="O"/>
       <io base="0xD9" num="1" type="I"/>
+      <io base="0xDA" num="2" type="O"/>
+      <io base="0xDB" num="1" type="I"/>
+      <level_2_via>interlocked_write_read</level_2_via> <!-- checked by kanjitest v2.x on Bengalack's -->
     </Kanji>
 
     <PPI id="ppi">
@@ -80,7 +83,7 @@
     </Matsushita>
 
     <T9769 id="T9769">
-      <subtype>A</subtype>
+      <subtype>A</subtype> <!-- there is also evidence that machines with type B were made -->
     </T9769>
 
     <primary slot="0">
@@ -142,6 +145,7 @@
       <secondary slot="2">
         <TC8566AF id="Memory Mapped FDC">
           <io_regs>7FF8</io_regs>
+          <connectionstyle>National</connectionstyle>
           <drives>1</drives>
           <rom>
             <filename>Sanyo_PHC-70FD.rom</filename>

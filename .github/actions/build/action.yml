@@ -41,10 +41,10 @@ runs:
         sudo update-alternatives --set x86_64-w64-mingw32-g++ /usr/bin/x86_64-w64-mingw32-g++-posix
     - name: Add MSBuild to PATH for Windows VC build
       if: ${{ inputs.os == 'windows-vc' }}
-      uses: microsoft/setup-msbuild@v2
+      uses: microsoft/setup-msbuild@v3
     - name: Cache 3rdparty libs
       id: cache-3rdparty
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |
           derived/3rdparty
@@ -55,7 +55,7 @@ runs:
       shell: pwsh
       run: python build/thirdparty_download.py windows
     - name: Get number of CPU cores
-      uses: SimenB/github-actions-cpu-cores@v2
+      uses: SimenB/github-actions-cpu-cores@v3
       id: cpu-cores
     - name: Make
       if: ${{ inputs.os != 'windows-vc' }}
@@ -65,7 +65,7 @@ runs:
         BUILD_TARGET="staticbindist"
         # run with minimal g++ version for native debug build, to get that covered
         if [ "${{ inputs.flavour }}" = "debug" ]; then
-          CXX_PART="CXX=g++-12"
+          CXX_PART="CXX=g++-13"
         fi
         if [ "${{ inputs.flavour }}" = "unittest" ] || [ "${{ inputs.flavour }}" = "super-opt" ] || [ "${{ inputs.flavour }}" = "debug" ]; then
           BUILD_TARGET=""
@@ -83,6 +83,14 @@ runs:
       run: |
         msbuild /m /p:Configuration=Release /p:Platform=x64 build\3rdparty\3rdparty.sln /m
         msbuild /m /p:Configuration=Release /p:Platform=x64 build\msvc\openmsx.sln /m
+    - name: Download wxCatapult release artifact
+      if: ${{ inputs.os == 'windows-vc' }}
+      shell: bash
+      run: |
+        mkdir -p derived/wxcatapult
+        curl -L -o wxcatapult.zip \
+          https://github.com/openMSX/wxcatapult/releases/download/wxcatapult-ci-latest/catapult-19.0-8-g7ff2d47-Windows-VC-x64-bin.zip
+        unzip -q wxcatapult.zip -d derived/wxcatapult
     - name: Create ZIP package of VC build
       if: ${{ inputs.os == 'windows-vc' }}
       shell: pwsh
@@ -117,31 +125,31 @@ runs:
         mv install ../${{ steps.openmsx.outputs.target_file }}
     - name: Upload redistributable zip
       if: ${{ inputs.os != 'windows-vc' && steps.openmsx.outputs.single_file == 'false' && inputs.flavour != 'unittest' && inputs.flavour != 'super-opt' && inputs.flavour != 'debug' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ steps.openmsx.outputs.target_file }}.zip
         path: ${{ steps.openmsx.outputs.derived_path }}/${{ steps.openmsx.outputs.target_file }}
     - name: Upload single redistributable ${{ steps.openmsx.outputs.single_output_file}}
       if: ${{ inputs.os != 'windows-vc' && steps.openmsx.outputs.single_file == 'true' && inputs.flavour != 'unittest' && inputs.flavour != 'super-opt' && inputs.flavour != 'debug' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ steps.openmsx.outputs.single_output_file }}
         path: ${{ steps.openmsx.outputs.derived_path }}/${{ steps.openmsx.outputs.single_output_file }}
     - name: Upload probe logging zip
       if: ${{ inputs.os != 'windows-vc' && inputs.flavour != 'unittest' && inputs.flavour != 'super-opt' && inputs.flavour != 'debug' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ steps.openmsx.outputs.target_file }}-proberesults.zip
         path: ${{ steps.openmsx.outputs.derived_path }}/config
     - name: Upload Windows VC redistributable
       if: ${{ inputs.os == 'windows-vc' && inputs.flavour != 'unittest' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ steps.openmsx.outputs.target_file }}.zip
         path: derived\x64-VC-Release\package-windows\*-bin.zip
     - name: Upload Windows VC debug symbols
       if: ${{ inputs.os == 'windows-vc' && inputs.flavour != 'unittest' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: ${{ steps.openmsx.outputs.target_file_pdb }}.zip
         path: derived\x64-VC-Release\package-windows\*-pdb.zip

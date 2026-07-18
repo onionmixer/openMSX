@@ -24,9 +24,10 @@ namespace openmsx {
 
 static constexpr unsigned AVI_HEADER_SIZE = 500;
 
-AviWriter::AviWriter(const Filename& filename, unsigned width_,
+AviWriter::AviWriter(const std::string& filename_, unsigned width_,
                      unsigned height_, unsigned channels_, unsigned freq_)
-	: file(filename, "wb")
+	: file(filename_, "wb")
+	, filename(filename_)
 	, codec(width_, height_)
 	, width(width_)
 	, height(height_)
@@ -43,7 +44,6 @@ AviWriter::~AviWriter()
 {
 	if (written == 0) {
 		// no data written yet (a recording less than one video frame)
-		std::string filename = file.getURL();
 		file.close(); // close file (needed for windows?)
 		FileOperations::unlink(filename);
 		return;
@@ -178,7 +178,7 @@ AviWriter::~AviWriter()
 		AVIOUTw(bitsPerSample);     // BitsPerSample
 	}
 
-	std::string versionStr = Version::full();
+	auto versionStr = Version::full();
 
 	// The standard snprintf() function does always zero-terminate the
 	// output it writes. Though windows doesn't have a snprintf() function,

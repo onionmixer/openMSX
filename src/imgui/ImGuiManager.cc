@@ -16,6 +16,7 @@
 #include "ImGuiOpenFile.hh"
 #include "ImGuiOsdIcons.hh"
 #include "ImGuiPalette.hh"
+#include "ImGuiPlotterViewer.hh"
 #include "ImGuiRasterViewer.hh"
 #include "ImGuiReverseBar.hh"
 #include "ImGuiSCCViewer.hh"
@@ -23,6 +24,7 @@
 #include "ImGuiSoundChip.hh"
 #include "ImGuiSymbols.hh"
 #include "ImGuiTools.hh"
+#include "ImGuiTraceViewer.hh"
 #include "ImGuiTrainer.hh"
 #include "ImGuiUtils.hh"
 #include "ImGuiVdpRegs.hh"
@@ -38,7 +40,6 @@
 #include "FileOperations.hh"
 #include "FilePool.hh"
 #include "HardwareConfig.hh"
-#include "Keyboard.hh"
 #include "Reactor.hh"
 #include "RealDrive.hh"
 #include "RomDatabase.hh"
@@ -46,6 +47,7 @@
 #include "SettingsConfig.hh"
 #include "VDP.hh"
 
+#include "format.hh"
 #include "stl.hh"
 #include "strCat.hh"
 
@@ -170,9 +172,11 @@ ImGuiManager::ImGuiManager(Reactor& reactor_)
 	breakPoints = std::make_unique<ImGuiBreakPoints>(*this);
 	symbols = std::make_unique<ImGuiSymbols>(*this);
 	watchExpr = std::make_unique<ImGuiWatchExpr>(*this);
+	traceViewer = std::make_unique<ImGuiTraceViewer>(*this);
 	vdpRegs = std::make_unique<ImGuiVdpRegs>(*this);
 	palette = std::make_unique<ImGuiPalette>(*this);
-	rasterViewer = std::make_unique<ImGuiRasterViewer>(*this);
+	plotterViewer = std::make_unique<ImGuiPlotterViewer>(*this);
+	rasterViewer = std::make_unique<ImGuiRasterViewer>(*this, *traceViewer);
 	osdIcons = std::make_unique<ImGuiOsdIcons>(*this);
 	openFile = std::make_unique<ImGuiOpenFile>(*this);
 	trainer = std::make_unique<ImGuiTrainer>(*this);
@@ -498,7 +502,7 @@ static bool hoverMenuBar()
 	       mouse.y >= topLeft.y && mouse.y <= bottomRight.y;
 }
 
-void ImGuiManager::paintImGui()
+void ImGuiManager::paintImGui(bool msxDisplayAreaFocused)
 {
 	im::ScopedFont sf(fontProp);
 
@@ -506,13 +510,6 @@ void ImGuiManager::paintImGui()
 	updateParts();
 
 	auto* motherBoard = reactor.getMotherBoard();
-	if (motherBoard) {
-		if (auto* keyb = motherBoard->getKeyboard()) {
-			auto time = motherBoard->getCurrentTime();
-			keyb->setFocus(!ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow), time);
-		}
-	}
-
 	for (auto* part : parts) {
 		part->paint(motherBoard);
 	}
@@ -536,9 +533,10 @@ void ImGuiManager::paintImGui()
 			});
 		});
 	} else {
-		bool active = ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) ||
-		              ImGui::IsWindowFocused(ImGuiHoveredFlags_AnyWindow) ||
-		              hoverMenuBar();
+		bool imGuiActive = !msxDisplayAreaFocused &&
+		                  (ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) ||
+		                   ImGui::IsWindowFocused(ImGuiHoveredFlags_AnyWindow));
+		bool active = imGuiActive || hoverMenuBar();
 		if (active != guiActive) {
 			guiActive = active;
 			auto& eventDistributor = reactor.getEventDistributor();
@@ -741,8 +739,12 @@ void ImGuiManager::paintImGui()
 
 void ImGuiManager::drawStatusBar(MSXMotherBoard* motherBoard)
 {
-	if (ImGui::BeginViewportSideBar("##MainStatusBar", nullptr, ImGuiDir_Down, ImGui::GetFrameHeight(),
-			ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar)) {
+	ImGuiWindowFlags flags =
+		ImGuiWindowFlags_NoScrollbar |
+		ImGuiWindowFlags_NoSavedSettings |
+		ImGuiWindowFlags_MenuBar |
+		ImGuiWindowFlags_NoFocusOnAppearing;
+	if (ImGui::BeginViewportSideBar("##MainStatusBar", nullptr, ImGuiDir_Down, ImGui::GetFrameHeight(), flags)) {
 		im::MenuBar([&]{
 			auto pos = ImGui::GetCursorPos();
 
@@ -755,9 +757,9 @@ void ImGuiManager::drawStatusBar(MSXMotherBoard* motherBoard)
 					fpsDrawTimeOut = 0.1f;
 					fps = reactor.getDisplay().getFps();
 				}
-				std::stringstream ssFps;
-				ssFps << std::fixed << std::setprecision(1) << fps << " fps";
-				ImGui::RightAlignText(ssFps.str(), "999.9 fps");
+				std::array<char, 32> buf;
+				auto fpsStr = format_to_buf(buf, "{:.1f} fps", fps);
+				ImGui::RightAlignText(fpsStr, "999.9 fps");
 				simpleToolTip("refresh rate");
 				ImGui::Separator();
 			}
@@ -786,18 +788,16 @@ void ImGuiManager::drawStatusBar(MSXMotherBoard* motherBoard)
 				}();
 				ImGui::RightAlignText(modeStr, "0 (80)");
 				simpleToolTip([&]{
-					std::string result = "screen mode as used in MSX-BASIC";
-					if (extendedStr[0]) {
-						strAppend(result, ", corresponds to VDP mode ", extendedStr);
-					}
-					return result;
+					return tmpStrCat(
+						"screen mode as used in MSX-BASIC",
+						strCat_if(extendedStr[0], ", corresponds to VDP mode ", extendedStr));
 				});
 				ImGui::Separator();
 			}
 
 			if (statusBarItemVisibilityTime) {
 				auto timeStr = motherBoard
-					? formatTime((motherBoard->getCurrentTime() - EmuTime::zero()).toDouble())
+					? formatTime(motherBoard->getCurrentTime().toDouble())
 					: formatTime(std::nullopt);
 				ImGui::RightAlignText(timeStr, formatTime(0));
 				simpleToolTip("time since MSX power on");

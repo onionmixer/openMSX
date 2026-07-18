@@ -26,7 +26,6 @@ InputEventGenerator::InputEventGenerator(CommandController& commandController,
 		false, Setting::Save::NO)
 	, escapeGrabCmd(commandController)
 {
-	setGrabInput(grabInput.getBoolean());
 	eventDistributor.registerEventListener(EventType::WINDOW, *this);
 }
 
@@ -86,12 +85,10 @@ void InputEventGenerator::poll(std::optional<int> timeoutMs)
 	// For the first event, optionally wait with timeout. This allows
 	// efficient blocking when the emulator is paused, waking immediately
 	// on any SDL event (mouse, keyboard, etc.) or on timeout.
-	auto getNextEvent = [&, firstEvent = true]() mutable -> bool {
-		if (firstEvent && timeoutMs) {
-			firstEvent = false;
-			return SDL_WaitEventTimeout(curr, *timeoutMs) == 1;
-		}
-		return SDL_PollEvent(curr) == 1;
+	auto getNextEvent = [&] {
+		return timeoutMs
+			? SDL_WaitEventTimeout(curr, *std::exchange(timeoutMs, {}))
+			: SDL_PollEvent(curr);
 	};
 
 	while (getNextEvent()) {
@@ -488,6 +485,11 @@ bool InputEventGenerator::signalEvent(const Event& event)
 		}
 	}, event);
 	return false;
+}
+
+void InputEventGenerator::initializeGrab() const
+{
+	setGrabInput(grabInput.getBoolean());
 }
 
 void InputEventGenerator::setGrabInput(bool grab) const
