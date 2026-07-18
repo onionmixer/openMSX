@@ -125,6 +125,7 @@ sources = files(
     'debugger/DebugHttpServerPort.cc',
     'debugger/DebugInfoProvider.cc',
     'debugger/DebugStreamFormatter.cc',
+    'debugger/DebugStreamWorker.cc',
     'debugger/DebugTelnetConnection.cc',
     'debugger/DebugTelnetServer.cc',
     'debugger/HtmlGenerator.cc',
