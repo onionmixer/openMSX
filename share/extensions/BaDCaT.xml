@@ -1,0 +1,17 @@
+<?xml version="1.0" ?>
+<!DOCTYPE msxconfig SYSTEM 'msxconfig2.dtd'>
+<msxconfig>
+  <info>
+    <name>BaDCaT</name>
+    <manufacturer>BaDCaT Electronics</manufacturer>
+    <code/>
+    <release_year>2020</release_year>
+    <description>BaDCaT WiFi modem cartridge: TL16C550C UART at I/O ports 0x80-0x87 (1.8432 MHz) with FIFOs, interrupts on /INT and auto flow control (MCR bit 5, FIFO mode). Only the external RS-232 port is emulated (wifi switch OFF); the ESP8266 WiFi modem is not. No ROM: software drives the UART directly. Connector: badcat-rs232. Setting badcat_rx_backpressure (default true) holds back incoming bytes while the RX FIFO is full; false overruns like real hardware.</description>
+    <type>RS-232C cartridge</type>
+  </info>
+  <devices>
+    <BaDCaT id="BaDCaT">
+      <io base="0x80" num="8"/>
+    </BaDCaT>
+  </devices>
+</msxconfig>

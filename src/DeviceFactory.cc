@@ -19,6 +19,7 @@
 #include "GoudaSCSI.hh"
 #include "JVCMSXMIDI.hh"
 #include "MSXAudio.hh"
+#include "MSXBaDCaT.hh"
 #include "MSXBunsetsu.hh"
 #include "MSXCielTurbo.hh"
 #include "MSXCliComm.hh"
@@ -276,6 +277,8 @@ std::unique_ptr<MSXDevice> DeviceFactory::create(DeviceConfig& conf)
 		result = std::make_unique<MSXModem>(conf);
 	} else if (type == "MSX-RS232") {
 		result = std::make_unique<MSXRS232>(conf);
+	} else if (type == "BaDCaT") {
+		result = std::make_unique<MSXBaDCaT>(conf);
 	} else if (type == "MegaRam") {
 		result = std::make_unique<MSXMegaRam>(conf);
 	} else if (type == "PAC") {

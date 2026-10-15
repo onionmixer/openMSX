@@ -1386,6 +1386,12 @@
     <ClCompile Include="$(OpenMSXSrcDir)\serial\MSXRS232.cc">
       <Filter>serial</Filter>
     </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\serial\MSXBaDCaT.cc">
+      <Filter>serial</Filter>
+    </ClCompile>
+    <ClCompile Include="$(OpenMSXSrcDir)\serial\NS16550.cc">
+      <Filter>serial</Filter>
+    </ClCompile>
     <ClCompile Include="$(OpenMSXSrcDir)\serial\RS232Connector.cc">
       <Filter>serial</Filter>
     </ClCompile>
@@ -3082,6 +3088,12 @@
       <Filter>serial</Filter>
     </None>
     <None Include="$(OpenMSXSrcDir)\serial\MSXRS232.hh">
+      <Filter>serial</Filter>
+    </None>
+    <None Include="$(OpenMSXSrcDir)\serial\MSXBaDCaT.hh">
+      <Filter>serial</Filter>
+    </None>
+    <None Include="$(OpenMSXSrcDir)\serial\NS16550.hh">
       <Filter>serial</Filter>
     </None>
     <None Include="$(OpenMSXSrcDir)\serial\RS232Connector.hh">
