@@ -22,7 +22,7 @@ openMSX/
 │   ├── sound/             # 사운드 칩 (53 .cc, 58 .hh)
 │   ├── fdc/               # 플로피 디스크 컨트롤러 (46 .cc, 47 .hh)
 │   ├── ide/               # IDE 장치 (18 .cc, 21 .hh)
-│   ├── serial/            # 시리얼 통신 (30 .cc, 31 .hh)
+│   ├── serial/            # 시리얼 통신 (33 .cc, 34 .hh · 2026-10-19 재계수 — Fork: RS232Host · BaDCaT/NS16550)
 │   ├── input/             # 입력 장치 (26 .cc, 30 .hh)
 │   ├── cassette/          # 카세트 테이프 (11 .cc, 11 .hh)
 │   ├── laserdisc/         # Laserdisc 플레이어 (5 .cc, 5 .hh)
@@ -62,7 +62,7 @@ openMSX/
 | fdc/ | 46 | 47 | 93 | 플로피 디스크 컨트롤러 |
 | video/ | 38 | 49 | 87 | VDP 에뮬레이션 |
 | imgui/ | 38 | 43 | 81 | Dear ImGui 디버거 UI |
-| serial/ | 30 | 31 | 61 | 시리얼/MIDI 통신 |
+| serial/ | 33 | 34 | 67 | 시리얼/MIDI 통신 (2026-10-19 재계수 · Fork 추가 3 쌍 포함 — §6b) |
 | input/ | 26 | 30 | 56 | 입력 장치 |
 | ide/ | 18 | 21 | 39 | IDE 하드 드라이브 |
 | events/ | 18 | 20 | 38 | 이벤트 시스템 |
@@ -459,6 +459,24 @@ set debug_http_enable on
 
 ---
 
+## 6b. 시리얼 장치 (Fork 추가·수정)
+
+### 6b.1 BaDCaT 카트리지 — TL16C550C UART (`47094ef8f` · 2026-10-15)
+- `-ext BaDCaT` · I/O `0x80`–`0x87` · 1.8432 MHz · UART `INTRPT` → MSX `/INT` · ROM 없음 · 커넥터 `badcat-rs232`(외부 RS-232 포트만 · ESP8266 WiFi 미에뮬레이트).
+- `src/serial/NS16550.*` — 16C550 코어(16 B FIFO · 트리거 1/4/8/14 · 문자 타임아웃 · IER/IIR · MSR 델타 · 루프백 · auto-RTS/CTS) · `src/serial/MSXBaDCaT.*` — MSX 장치.
+- 설정 `badcat_rx_backpressure`(기본 true = RX FIFO 가 차면 꽂힌 장치가 기다림 · false = 실기처럼 오버런).
+- 상세 = **`BADCAT.md`**.
+
+### 6b.2 RS232Host pluggable (`2133181e8` · `a268e42fb`)
+- `plug <rs232 커넥터> rs232-host` — 에뮬 RS-232 포트를 호스트 시리얼 장치(`/dev/ttyUSB0` · socat pty)에 직결(raw 9600-8-N-1).
+- 모뎀 라인 캐시(포트 읽기마다 ioctl 하지 않음 — USB 시리얼 감속 방지) · `isRxBusy()` 로 i8251 RXRDY 중 전달 보류.
+
+### 6b.3 RS232Net 백프레셔 (`f02010e81`)
+- `RS232Net::signal` 이 `isRxBusy()` 를 본다 — 9600 bps 수신 폭주에서 i8251 1 바이트 버퍼 오버런을 막는다(드레인 = `I8251::readTrans`/`execRecv` 의 `signal()` 재호출) · `RS232Host` 송신 EAGAIN 재시도.
+- ★`rs232-net-ip232`(upstream 설정 · 기본 ON)이 켜져 있으면 `0xFF`+명령이 IP232 제어로 소비된다 — 텔넷 IAC 를 그대로 넘기려면 `set rs232-net-ip232 false`.
+
+---
+
 ## 7. 브레이크포인트 시스템
 
 ### 7.1 브레이크포인트 타입
@@ -730,10 +748,11 @@ openMSX의 디버거 시스템은 다음과 같은 특징을 가집니다:
 5. **성능 고려**: 캐시 라인, fast-forward 모드, 조건부 느린 경로
 6. **확장성**: Debuggable 인터페이스로 새 디버깅 대상 추가 용이
 7. **HTTP 디버그 서버** (Fork 추가): 웹 브라우저를 통한 실시간 디버깅
+8. **시리얼 장치** (Fork 추가·수정): BaDCaT(TL16C550C) 카트리지 · RS232Host · RS232Net 백프레셔(§6b · `BADCAT.md`)
 
 이 에뮬레이터는 MSX 개발자가 어셈블리 레벨에서 프로그램을 분석하고 디버깅하는 데 필요한 모든 기능을 제공합니다.
 
 ---
 
-*마지막 업데이트: 2025-12-27*
+*마지막 업데이트: 2026-10-19(§6b 시리얼 · serial 파일 수) · 그 밖의 수치는 2025-12-27 기준*
 *Fork: https://github.com/onionmixer/openMSX*
